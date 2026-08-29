@@ -1,0 +1,232 @@
+{
+  "seed": 42,
+  "metrics": {
+    "total_orders": 1094,
+    "total_order_value": 2006482.22,
+    "actual_rto_orders": 318,
+    "actual_rto_value": 603623.95,
+    "baseline_gross_recovery": 0.0,
+    "baseline_intervention_cost": 0.0,
+    "baseline_net_recovery": 0.0,
+    "treatment_gross_recovery": 20996.16,
+    "treatment_intervention_cost": 11825.64,
+    "treatment_net_recovery": 9170.52,
+    "incremental_gross_recovery": 20996.16,
+    "incremental_net_recovery": 9170.52,
+    "incremental_net_recovery_per_order": 8.38255941499086,
+    "total_predicted_revenue_at_risk": 624088.81,
+    "targeted_revenue_at_risk": 388875.52,
+    "targeting_rate": 0.6231092654905958,
+    "intervention_rate": 0.44789762340036565,
+    "interventions_attempted": 490,
+    "successful_recoveries": 77,
+    "recovery_rate": 0.24213836477987422,
+    "recovery_success_rate": 0.15714285714285714,
+    "cost_per_successful_recovery": 153.57974025974025,
+    "cost_per_rupee_recovered": 0.5632287046774267,
+    "false_intervention_count": 287,
+    "interventions_on_actual_rto_orders": 203,
+    "false_intervention_rate": 0.5857142857142857,
+    "policy_blocked_actions": 2929,
+    "guardrail_trigger_count": 3549,
+    "orders_sent_to_manual_review": 0,
+    "orders_with_no_action": 604
+  },
+  "action_distribution": [
+    {
+      "action": "NO_ACTION",
+      "count": 604,
+      "percentage": 0.5521023765996343,
+      "gross_recovery": 0.0,
+      "intervention_cost": 0.0,
+      "net_recovery": 0.0
+    },
+    {
+      "action": "ADDRESS_OTP",
+      "count": 0,
+      "percentage": 0.0,
+      "gross_recovery": 0,
+      "intervention_cost": 0,
+      "net_recovery": 0
+    },
+    {
+      "action": "PARTIAL_PREPAY",
+      "count": 462,
+      "percentage": 0.42230347349177333,
+      "gross_recovery": 20083.77,
+      "intervention_cost": 9240.0,
+      "net_recovery": 10843.77
+    },
+    {
+      "action": "PREPAID_INCENTIVE",
+      "count": 28,
+      "percentage": 0.025594149908592323,
+      "gross_recovery": 912.39,
+      "intervention_cost": 2585.64,
+      "net_recovery": -1673.25
+    },
+    {
+      "action": "MANUAL_REVIEW",
+      "count": 0,
+      "percentage": 0.0,
+      "gross_recovery": 0,
+      "intervention_cost": 0,
+      "net_recovery": 0
+    }
+  ],
+  "risk_band_analysis": [
+    {
+      "risk_band": "LOW",
+      "orders": 781,
+      "actual_rto_rate": 0.22535211267605634,
+      "average_predicted_rto_probability": 0.24715981664699138,
+      "interventions": 177,
+      "successful_recoveries": 22,
+      "net_recovery": 1055.31
+    },
+    {
+      "risk_band": "MEDIUM",
+      "orders": 298,
+      "actual_rto_rate": 0.4563758389261745,
+      "average_predicted_rto_probability": 0.4295714018526719,
+      "interventions": 298,
+      "successful_recoveries": 54,
+      "net_recovery": 7508.22
+    },
+    {
+      "risk_band": "HIGH",
+      "orders": 15,
+      "actual_rto_rate": 0.4,
+      "average_predicted_rto_probability": 0.5749417713605076,
+      "interventions": 15,
+      "successful_recoveries": 1,
+      "net_recovery": 606.99
+    }
+  ],
+  "order_value_analysis": [
+    {
+      "order_value_bucket": "< Rs 1000",
+      "orders": 312,
+      "rto_rate": 0.25,
+      "revenue_at_risk": 55474.62,
+      "interventions": 119,
+      "net_recovery": 257.67
+    },
+    {
+      "order_value_bucket": "Rs 1000-Rs 2500",
+      "orders": 555,
+      "rto_rate": 0.31351351351351353,
+      "revenue_at_risk": 286410.88,
+      "interventions": 254,
+      "net_recovery": 5407.29
+    },
+    {
+      "order_value_bucket": "Rs 2500-Rs 5000",
+      "orders": 186,
+      "rto_rate": 0.3010752688172043,
+      "revenue_at_risk": 193016.35,
+      "interventions": 93,
+      "net_recovery": 5133.13
+    },
+    {
+      "order_value_bucket": "Rs 5000-Rs 10000",
+      "orders": 39,
+      "rto_rate": 0.20512820512820512,
+      "revenue_at_risk": 48481.36,
+      "interventions": 23,
+      "net_recovery": -1468.24
+    },
+    {
+      "order_value_bucket": "> Rs 10000",
+      "orders": 2,
+      "rto_rate": 1.0,
+      "revenue_at_risk": 20240.739999999998,
+      "interventions": 1,
+      "net_recovery": -159.33
+    }
+  ],
+  "sensitivity_analysis": [
+    {
+      "scenario": "CONSERVATIVE",
+      "gross_recovery": 12985.06,
+      "intervention_cost": 11193.64,
+      "net_recovery": 1791.42,
+      "incremental_net_recovery": 1791.42
+    },
+    {
+      "scenario": "BASE",
+      "gross_recovery": 20996.16,
+      "intervention_cost": 11825.64,
+      "net_recovery": 9170.52,
+      "incremental_net_recovery": 9170.52
+    },
+    {
+      "scenario": "OPTIMISTIC",
+      "gross_recovery": 32289.13,
+      "intervention_cost": 12429.51,
+      "net_recovery": 19859.62,
+      "incremental_net_recovery": 19859.62
+    }
+  ],
+  "threshold_analysis": [
+    {
+      "threshold": 0.2,
+      "intervention_rate": 0.8126142595978062,
+      "successful_recoveries": 110,
+      "gross_recovery": 27164.42,
+      "cost": 20588.82,
+      "net_recovery": 6575.6,
+      "false_intervention_rate": 0.6670416197975253
+    },
+    {
+      "threshold": 0.3,
+      "intervention_rate": 0.44789762340036565,
+      "successful_recoveries": 77,
+      "gross_recovery": 20996.16,
+      "cost": 11825.64,
+      "net_recovery": 9170.52,
+      "false_intervention_rate": 0.5857142857142857
+    },
+    {
+      "threshold": 0.4,
+      "intervention_rate": 0.19744058500914077,
+      "successful_recoveries": 39,
+      "gross_recovery": 13673.710000000001,
+      "cost": 5670.64,
+      "net_recovery": 8003.070000000001,
+      "false_intervention_rate": 0.5555555555555556
+    },
+    {
+      "threshold": 0.5,
+      "intervention_rate": 0.048446069469835464,
+      "successful_recoveries": 10,
+      "gross_recovery": 3927.0,
+      "cost": 1488.55,
+      "net_recovery": 2438.4500000000003,
+      "false_intervention_rate": 0.5283018867924528
+    },
+    {
+      "threshold": 0.6,
+      "intervention_rate": 0.0018281535648994515,
+      "successful_recoveries": 1,
+      "gross_recovery": 320.41,
+      "cost": 40.0,
+      "net_recovery": 280.41,
+      "false_intervention_rate": 0.0
+    },
+    {
+      "threshold": 0.7,
+      "intervention_rate": 0.0,
+      "successful_recoveries": 0,
+      "gross_recovery": 0.0,
+      "cost": 0.0,
+      "net_recovery": 0.0,
+      "false_intervention_rate": 0.0
+    }
+  ],
+  "notes": {
+    "primary_metric": "incremental_net_recovery",
+    "data_warning": "ALL RESULTS ARE SIMULATED USING SYNTHETIC DATA AND SYNTHETIC INTERVENTION ASSUMPTIONS.",
+    "no_leakage": "actual rto_outcome is not used for decision generation; it is used only after decisions for evaluation."
+  }
+}
