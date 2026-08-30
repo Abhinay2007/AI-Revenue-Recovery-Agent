@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import db_health, health, recovery
+from app.api.routes import agent, db_health, health, recovery
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.init_db import init_db
@@ -32,6 +32,7 @@ app = FastAPI(title="AI Revenue Recovery Agent", version="0.1.0", lifespan=lifes
 app.include_router(health.router)
 app.include_router(db_health.router)
 app.include_router(recovery.router)
+app.include_router(agent.router)
 
 
 @app.exception_handler(Exception)

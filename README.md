@@ -148,6 +148,24 @@ Run the synthetic recovery experiment:
 
 This compares a no-intervention baseline with the deterministic recovery policy on the same held-out COD evaluation batch. Outputs are written to `evaluation/reports/recovery_experiment.json` and `evaluation/reports/recovery_experiment.md`.
 
+Agent API:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"Recover ORD-0042-0009754","session_id":"demo"}'
+```
+
+The first response only creates a pending simulated action. Execute through explicit approval:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/agent/approve \
+  -H "Content-Type: application/json" \
+  -d '{"pending_action_id":"...","approved":true,"approved_action":"PARTIAL_PREPAY","session_id":"demo"}'
+```
+
+No real payment or customer message is executed in this milestone.
+
 ## Synthetic Data
 
 Generate 10,000 deterministic synthetic orders:
