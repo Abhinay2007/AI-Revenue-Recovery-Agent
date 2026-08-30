@@ -12,7 +12,7 @@ This project aims to move beyond merely identifying risky orders. The larger goa
 
 ## Current Milestone
 
-This repository currently contains only the project foundation and synthetic-data pipeline.
+This repository currently contains the project foundation, synthetic-data pipeline, COD RTO model, deterministic recovery decision layer, and a bounded AI agent orchestration layer.
 
 Implemented now:
 
@@ -28,18 +28,19 @@ Implemented now:
 - Prediction service with risk levels and model-derived explanation metadata
 - Deterministic recovery decision engine with policy guardrails and audit event output
 - Synthetic recovery simulator foundation
+- AI revenue recovery agent with local, mock, and OpenAI Responses API providers
+- Typed tools for order analysis, risk, revenue-at-risk, recovery recommendations, policy checks, simulated execution, audit, and merchant-level summaries
+- Explicit approval API before simulated recovery execution
 - pytest coverage for the foundation
 - Docker Compose for backend and PostgreSQL
 
 Not implemented yet:
 
-- SHAP explainability
-- AI agent
-- Guardrails or policy execution
 - Razorpay integration
 - React dashboard
-- Evaluation harness logic
-- Full SHAP explainability
+- Real payment execution
+- Customer messaging
+- Durable audit or pending-approval persistence
 
 ## Planned Architecture
 
@@ -166,6 +167,17 @@ curl -X POST http://localhost:8000/api/v1/agent/approve \
 
 No real payment or customer message is executed in this milestone.
 
+Real LLM smoke test:
+
+```bash
+LLM_PROVIDER=openai \
+LLM_MODEL=<configured-model> \
+LLM_API_KEY=<secret> \
+.venv/bin/python scripts/agent_smoke_test.py
+```
+
+The smoke test makes one real LLM request, verifies that at least one typed tool was exercised, checks that financial values are grounded in tool outputs, and separately verifies the approval gate with the offline provider. The normal pytest suite does not call external APIs.
+
 ## Synthetic Data
 
 Generate 10,000 deterministic synthetic orders:
@@ -190,6 +202,11 @@ Configuration is read from environment variables:
 APP_ENV
 DATABASE_URL
 LOG_LEVEL
+LLM_PROVIDER
+LLM_MODEL
+LLM_API_KEY
+MAX_AGENT_STEPS
+LLM_REQUEST_TIMEOUT_SECONDS
 ```
 
 Use `.env.example` as a safe template. Do not commit `.env`.

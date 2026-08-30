@@ -43,12 +43,17 @@ class PendingAction(BaseModel):
 class AgentState(BaseModel):
     session_id: str
     user_request: str
+    intent: str | None = None
     order_id: str | None = None
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     risk_result: dict[str, Any] | None = None
     revenue_result: dict[str, Any] | None = None
     recovery_result: dict[str, Any] | None = None
     policy_result: dict[str, Any] | None = None
+    merchant_summary: dict[str, Any] | None = None
+    priority_orders: dict[str, Any] | None = None
+    recovery_opportunity: dict[str, Any] | None = None
+    action_distribution: dict[str, Any] | None = None
     approval_state: str = "NOT_REQUIRED"
     execution_result: dict[str, Any] | None = None
     audit_event: dict[str, Any] | None = None

@@ -14,6 +14,10 @@ class AgentIntent(StrEnum):
     INSPECT_ORDER = "INSPECT_ORDER"
     RECOMMEND_RECOVERY = "RECOMMEND_RECOVERY"
     FIND_REVENUE_AT_RISK = "FIND_REVENUE_AT_RISK"
+    REVENUE_SUMMARY = "REVENUE_SUMMARY"
+    PRIORITY_RECOVERY = "PRIORITY_RECOVERY"
+    RECOVERY_OPPORTUNITY = "RECOVERY_OPPORTUNITY"
+    ACTION_DISTRIBUTION = "ACTION_DISTRIBUTION"
     REQUEST_EXECUTION = "REQUEST_EXECUTION"
     UNKNOWN = "UNKNOWN"
 
@@ -55,6 +59,9 @@ class LLMProvider(ABC):
     ) -> ProviderResponse:
         raise RuntimeError(f"provider {self.name} does not support tool calling")
 
+    def reset(self) -> None:
+        return None
+
 
 class LocalRuleBasedProvider(LLMProvider):
     name = "local"
@@ -67,6 +74,14 @@ class LocalRuleBasedProvider(LLMProvider):
         order_match = self.ORDER_PATTERN.search(message)
         order_id = order_match.group(0).upper() if order_match else None
 
+        if any(term in normalized for term in ["how much revenue", "revenue is currently at risk", "merchant summary"]):
+            return IntentPlan(AgentIntent.REVENUE_SUMMARY)
+        if any(term in normalized for term in ["prioritize", "priority recovery", "top recovery"]):
+            return IntentPlan(AgentIntent.PRIORITY_RECOVERY)
+        if any(term in normalized for term in ["potentially recover", "recovery opportunity", "can the recovery system"]):
+            return IntentPlan(AgentIntent.RECOVERY_OPPORTUNITY)
+        if any(term in normalized for term in ["what actions", "action distribution", "actions is the recovery system"]):
+            return IntentPlan(AgentIntent.ACTION_DISTRIBUTION)
         if any(term in normalized for term in ["highest revenue", "revenue at risk", "at-risk orders"]) and not order_id:
             return IntentPlan(AgentIntent.FIND_REVENUE_AT_RISK)
         if any(term in normalized for term in ["recover", "execute", "run recovery"]):
@@ -118,6 +133,7 @@ class OpenAIResponsesProvider(LLMProvider):
         self.timeout_seconds = timeout_seconds
         self.base_url = base_url
         self.client = client or httpx.Client(timeout=timeout_seconds)
+        self._previous_response_id: str | None = None
 
     def plan(self, message: str) -> IntentPlan:
         return LocalRuleBasedProvider().plan(message)
@@ -128,17 +144,21 @@ class OpenAIResponsesProvider(LLMProvider):
         tools: list[dict[str, Any]],
         tool_choice: str = "auto",
     ) -> ProviderResponse:
+        payload_input = messages
+        request_body: dict[str, Any] = {
+            "model": self.model,
+            "input": payload_input,
+            "tools": tools,
+            "tool_choice": tool_choice,
+            "parallel_tool_calls": False,
+        }
+        if self._previous_response_id and all(message.get("type") == "function_call_output" for message in messages):
+            request_body["previous_response_id"] = self._previous_response_id
         try:
             response = self.client.post(
                 self.base_url,
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-                json={
-                    "model": self.model,
-                    "input": messages,
-                    "tools": tools,
-                    "tool_choice": tool_choice,
-                    "parallel_tool_calls": False,
-                },
+                json=request_body,
             )
             response.raise_for_status()
         except httpx.TimeoutException as exc:
@@ -146,7 +166,11 @@ class OpenAIResponsesProvider(LLMProvider):
         except httpx.HTTPError as exc:
             raise RuntimeError(f"LLM provider request failed: {exc}") from exc
         payload = response.json()
+        self._previous_response_id = str(payload.get("id") or self._previous_response_id or "")
         return parse_openai_response(payload)
+
+    def reset(self) -> None:
+        self._previous_response_id = None
 
 
 def parse_openai_response(payload: dict[str, Any]) -> ProviderResponse:
