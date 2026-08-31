@@ -10,7 +10,7 @@ from app.agent.prompts import AGENT_SYSTEM_PROMPT
 from app.agent.provider import AgentIntent, LLMProvider, ProviderToolCall, build_provider
 from app.agent.schemas import AgentApprovalRequest, AgentChatRequest, AgentResponse
 from app.agent.state import AgentState, PendingAction, ToolCallRecord, pending_approval_store
-from app.core.config import get_settings
+from app.core.config import get_default_artifact_path, get_default_dataset_path, get_settings
 from app.tools.audit_tool import AuditTool
 from app.tools.execution_tool import SimulatedRecoveryExecutor
 from app.tools.merchant_tool import MerchantContext, MerchantTool
@@ -28,12 +28,14 @@ logger = logging.getLogger(__name__)
 class AgentToolset:
     def __init__(
         self,
-        dataset_path: Path = Path("data/generated/orders.csv"),
-        artifact_path: Path = Path("data/generated/models/rto_predictor.joblib"),
+        dataset_path: Path | None = None,
+        artifact_path: Path | None = None,
         audit_tool: AuditTool | None = None,
     ) -> None:
-        self.order_tool = OrderTool(dataset_path)
-        self.risk_tool = RiskTool(self.order_tool, artifact_path)
+        resolved_dataset_path = dataset_path or get_default_dataset_path()
+        resolved_artifact_path = artifact_path or get_default_artifact_path()
+        self.order_tool = OrderTool(resolved_dataset_path)
+        self.risk_tool = RiskTool(self.order_tool, resolved_artifact_path)
         self.revenue_tool = RevenueTool(self.order_tool, self.risk_tool)
         self.recovery_tool = RecoveryTool(self.order_tool, self.risk_tool)
         self.policy_tool = PolicyTool(self.recovery_tool)

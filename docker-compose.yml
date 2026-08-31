@@ -21,6 +21,8 @@ services:
       APP_ENV: development
       LOG_LEVEL: INFO
       DATABASE_URL: postgresql+psycopg://revenue_user:revenue_password@postgres:5432/revenue_recovery
+      DATASET_PATH: /app/data/generated/orders.csv
+      ARTIFACT_PATH: /app/data/generated/models/rto_predictor.joblib
     ports:
       - "8000:8000"
     depends_on:

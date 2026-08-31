@@ -8,9 +8,10 @@ from typing import Any
 import joblib
 import pandas as pd
 
+from app.core.config import get_default_artifact_path
 from app.ml.features import MODEL_FEATURES, build_feature_frame
 
-DEFAULT_ARTIFACT_PATH = Path("data/generated/models/rto_predictor.joblib")
+DEFAULT_ARTIFACT_PATH = get_default_artifact_path()
 
 
 @dataclass(frozen=True)

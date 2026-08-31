@@ -11,12 +11,13 @@ from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 
+from app.core.config import get_default_dataset_path
 from app.ml.data import encode_target, filter_cod_orders, load_orders_csv, split_boundaries, temporal_split
 from app.ml.evaluation import CostAssumptions, classification_metrics, threshold_analysis
 from app.ml.features import MODEL_FEATURES, add_derived_features, build_feature_frame, build_preprocessor
 from app.ml.train import RANDOM_STATE, fit_pipeline
 
-DEFAULT_DATASET_PATH = Path("data/generated/orders.csv")
+DEFAULT_DATASET_PATH = get_default_dataset_path()
 DEFAULT_FEATURE_REPORT_PATH = Path("evaluation/reports/rto_feature_analysis.md")
 DEFAULT_INVESTIGATION_REPORT_PATH = Path("evaluation/reports/rto_model_investigation.md")
 

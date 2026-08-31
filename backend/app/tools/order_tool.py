@@ -5,6 +5,7 @@ from typing import Any
 
 import pandas as pd
 
+from app.core.config import get_default_dataset_path
 from app.ml.data import load_orders_csv
 from app.tools.schemas import OrderQueryInput, OrderSnapshot, ToolError
 
@@ -29,8 +30,8 @@ PREDICTION_TIME_COLUMNS = [
 class OrderTool:
     description = "Retrieve synthetic order records without exposing post-outcome target fields."
 
-    def __init__(self, dataset_path: Path = Path("data/generated/orders.csv")) -> None:
-        self.dataset_path = dataset_path
+    def __init__(self, dataset_path: Path | None = None) -> None:
+        self.dataset_path = dataset_path or get_default_dataset_path()
         self._orders: pd.DataFrame | None = None
 
     def _load(self) -> pd.DataFrame:

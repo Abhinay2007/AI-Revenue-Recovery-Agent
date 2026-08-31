@@ -13,6 +13,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
+from app.core.config import get_default_artifact_path, get_default_dataset_path
 from app.ml.data import encode_target, filter_cod_orders, load_orders_csv, split_boundaries, temporal_split
 from app.ml.evaluation import (
     CostAssumptions,
@@ -24,8 +25,8 @@ from app.ml.evaluation import (
 from app.ml.features import EXCLUDED_FEATURES, MODEL_FEATURES, build_feature_frame, build_preprocessor
 from app.ml.rto_predictor import RiskThresholds
 
-DEFAULT_DATASET_PATH = Path("data/generated/orders.csv")
-DEFAULT_ARTIFACT_PATH = Path("data/generated/models/rto_predictor.joblib")
+DEFAULT_DATASET_PATH = get_default_dataset_path()
+DEFAULT_ARTIFACT_PATH = get_default_artifact_path()
 DEFAULT_REPORT_PATH = Path("evaluation/reports/rto_model_report.md")
 DEFAULT_METADATA_PATH = Path("evaluation/reports/rto_model_metrics.json")
 RANDOM_STATE = 42

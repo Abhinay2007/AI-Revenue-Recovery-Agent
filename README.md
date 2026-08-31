@@ -201,6 +201,7 @@ Configuration is read from environment variables:
 ```text
 APP_ENV
 DATABASE_URL
+DATASET_PATH
 LOG_LEVEL
 LLM_PROVIDER
 LLM_MODEL
@@ -209,4 +210,4 @@ MAX_AGENT_STEPS
 LLM_REQUEST_TIMEOUT_SECONDS
 ```
 
-Use `.env.example` as a safe template. Do not commit `.env`.
+`DATASET_PATH` resolves the synthetic demo dataset from the project root by default, and the Docker image also includes the dataset at `/app/data/generated/orders.csv`. Use `.env.example` as a safe template. Do not commit `.env`.

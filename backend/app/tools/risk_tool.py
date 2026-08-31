@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from app.core.config import get_default_artifact_path
 from app.ml.rto_predictor import RTOPredictor
 from app.tools.order_tool import OrderTool
 from app.tools.schemas import RiskResult, ToolError
@@ -10,9 +11,9 @@ from app.tools.schemas import RiskResult, ToolError
 class RiskTool:
     description = "Calculate RTO probability using the existing trained model artifact."
 
-    def __init__(self, order_tool: OrderTool, artifact_path: Path = Path("data/generated/models/rto_predictor.joblib")) -> None:
+    def __init__(self, order_tool: OrderTool, artifact_path: Path | None = None) -> None:
         self.order_tool = order_tool
-        self.artifact_path = artifact_path
+        self.artifact_path = artifact_path or get_default_artifact_path()
         self._predictor: RTOPredictor | None = None
 
     def _load_predictor(self) -> RTOPredictor:
