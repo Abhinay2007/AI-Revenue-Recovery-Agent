@@ -28,7 +28,7 @@ Implemented now:
 - Prediction service with risk levels and model-derived explanation metadata
 - Deterministic recovery decision engine with policy guardrails and audit event output
 - Synthetic recovery simulator foundation
-- AI revenue recovery agent with local, mock, and OpenAI Responses API providers
+- AI revenue recovery agent with local, mock, OpenAI Responses API, and Groq providers
 - Typed tools for order analysis, risk, revenue-at-risk, recovery recommendations, policy checks, simulated execution, audit, and merchant-level summaries
 - Explicit approval API before simulated recovery execution
 - pytest coverage for the foundation
@@ -170,13 +170,13 @@ No real payment or customer message is executed in this milestone.
 Real LLM smoke test:
 
 ```bash
-LLM_PROVIDER=openai \
+LLM_PROVIDER=groq \
 LLM_MODEL=<configured-model> \
 LLM_API_KEY=<secret> \
 .venv/bin/python scripts/agent_smoke_test.py
 ```
 
-The smoke test makes one real LLM request, verifies that at least one typed tool was exercised, checks that financial values are grounded in tool outputs, and separately verifies the approval gate with the offline provider. The normal pytest suite does not call external APIs.
+The smoke test makes one real LLM request, verifies that at least one typed tool was exercised, checks that financial values are grounded in tool outputs, and separately verifies the approval gate with the offline provider. Both OpenAI and Groq are interchangeable LLM providers: they orchestrate typed tools while deterministic backend services remain authoritative for financial calculations, recovery economics, policy, approval, execution, and audit. The normal pytest suite does not call external APIs.
 
 ## Synthetic Data
 

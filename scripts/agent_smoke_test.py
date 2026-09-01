@@ -38,12 +38,12 @@ def validate_analysis_response(response) -> None:
 
 def run_real_analysis() -> object:
     settings = get_settings()
-    if settings.llm_provider != "openai":
-        raise RuntimeError("Set LLM_PROVIDER=openai for the real smoke test")
+    if settings.llm_provider not in {"openai", "groq"}:
+        raise RuntimeError("Set LLM_PROVIDER=openai or groq for the real smoke test")
     if not settings.llm_api_key:
         raise RuntimeError("Set LLM_API_KEY for the real smoke test")
     if not settings.llm_model or settings.llm_model == "rule-based-recovery-agent":
-        raise RuntimeError("Set LLM_MODEL to the configured OpenAI model")
+        raise RuntimeError("Set LLM_MODEL to the configured model")
 
     from app.agent.agent import RevenueRecoveryAgent
     from app.agent.schemas import AgentChatRequest
@@ -114,7 +114,7 @@ def main() -> int:
         return fail(str(exc))
 
     print("Real LLM smoke test passed.")
-    print(f"Provider/model: openai/{get_settings().llm_model}")
+    print(f"Provider/model: {get_settings().llm_provider}/{get_settings().llm_model}")
     print("Tool calls:", ", ".join(call["tool_name"] for call in real_response.tool_calls if "tool_name" in call))
     print("\nGrounded response:\n")
     print(real_response.natural_language_response)

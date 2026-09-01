@@ -35,7 +35,7 @@ backend/app/agent/
 backend/app/tools/
 ```
 
-The default provider is `local`, a deterministic rule-based planner used for offline tests and hackathon demos without external model credentials. The provider abstraction now also supports an OpenAI Responses API provider for structured tool calling.
+The default provider is `local`, a deterministic rule-based planner used for offline tests and hackathon demos without external model credentials. The provider abstraction also supports OpenAI Responses API and Groq Chat Completions providers for structured tool calling.
 
 ```text
 Merchant/User
@@ -102,19 +102,19 @@ All values come from deterministic backend services. The LLM may summarize them,
 Set:
 
 ```text
-LLM_PROVIDER=openai
+LLM_PROVIDER=groq
 LLM_MODEL=<model-name>
 LLM_API_KEY=<secret>
 ```
 
-The OpenAI provider is isolated in `backend/app/agent/provider.py`. It sends the system prompt, conversation messages, and strict tool schemas to the Responses API, then returns either final text or structured tool calls.
+The OpenAI and Groq providers are isolated in `backend/app/agent/provider.py`. Each sends the system prompt, conversation messages, and strict tool schemas to its provider API, then returns either final text or structured tool calls. Groq uses Chat Completions message continuation and preserves the assistant tool-call message before appending typed tool results.
 
 Secrets are read from environment variables only. They are not stored in agent state, tool calls, or audit events.
 
 Manual smoke test:
 
 ```bash
-LLM_PROVIDER=openai \
+LLM_PROVIDER=groq \
 LLM_MODEL=<configured-model> \
 LLM_API_KEY=<secret> \
 .venv/bin/python scripts/agent_smoke_test.py
@@ -307,6 +307,7 @@ Agent
   ↓
 LLMProvider
   ├── OpenAIResponsesProvider
+  ├── GroqProvider
   ├── HostedProvider (future)
   ├── ModalProvider (future)
   └── LocalRuleBasedProvider
@@ -340,7 +341,7 @@ A future Modal-backed provider can implement the same `LLMProvider.plan()` inter
 
 ## Current Limitations
 
-- Real OpenAI provider is API-ready and smoke-tested manually when credentials are configured; automated tests use mock/local providers.
+- OpenAI and Groq providers are API-ready; automated tests use mocked provider clients and do not make external API calls.
 - No Razorpay integration.
 - No real payment execution.
 - No customer messaging.

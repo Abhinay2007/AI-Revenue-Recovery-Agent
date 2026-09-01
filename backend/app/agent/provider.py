@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Any
 
 import httpx
+from groq import Groq
 
 
 class AgentIntent(StrEnum):
@@ -173,6 +174,121 @@ class OpenAIResponsesProvider(LLMProvider):
         self._previous_response_id = None
 
 
+class GroqProvider(LLMProvider):
+    supports_tool_calling = True
+
+    def __init__(self, model: str, api_key: str | None, timeout_seconds: float = 20.0, client: Any | None = None) -> None:
+        if not api_key:
+            raise ValueError("LLM_API_KEY is required when LLM_PROVIDER=groq")
+        self.name = "groq"
+        self.model = model
+        self.api_key = api_key
+        self.timeout_seconds = timeout_seconds
+        self.client = client or Groq(api_key=api_key, timeout=timeout_seconds)
+        self._messages: list[dict[str, Any]] = []
+
+    def plan(self, message: str) -> IntentPlan:
+        return LocalRuleBasedProvider().plan(message)
+
+    def complete(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]], tool_choice: str = "auto") -> ProviderResponse:
+        if not self._messages:
+            self._messages = [dict(message) for message in messages]
+        else:
+            self._messages.extend(self._translate_tool_output(message) for message in messages)
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=self._messages,
+                tools=[self._translate_tool(tool) for tool in tools],
+                tool_choice=tool_choice,
+                parallel_tool_calls=False,
+            )
+        except Exception as exc:
+            if isinstance(exc, TimeoutError) or "timeout" in type(exc).__name__.lower():
+                raise TimeoutError("Groq provider request timed out") from exc
+            if getattr(exc, "status_code", None) == 429:
+                raise RuntimeError("Groq provider rate limited") from exc
+            raise RuntimeError(f"Groq provider request failed: {exc}") from exc
+
+        provider_response = parse_groq_response(response)
+        if provider_response.tool_calls:
+            self._messages.append({
+                "role": "assistant",
+                "content": provider_response.final_text,
+                "tool_calls": [
+                    {"id": call.id, "type": "function", "function": {"name": call.name, "arguments": json.dumps(call.arguments)}}
+                    for call in provider_response.tool_calls
+                ],
+            })
+        return provider_response
+
+    @staticmethod
+    def _translate_tool_output(message: dict[str, Any]) -> dict[str, Any]:
+        output = message.get("output", "")
+        if not isinstance(output, str):
+            output = json.dumps(output, sort_keys=True)
+        return {"role": "tool", "tool_call_id": str(message.get("call_id") or ""), "content": output}
+
+    @staticmethod
+    def _translate_tool(tool: dict[str, Any]) -> dict[str, Any]:
+        if tool.get("type") == "function" and "function" in tool:
+            function = dict(tool["function"])
+        else:
+            function = {
+                "name": str(tool.get("name") or ""),
+                "description": str(tool.get("description") or ""),
+                "parameters": tool.get("parameters") or {},
+            }
+            if "strict" in tool:
+                function["strict"] = bool(tool["strict"])
+        parameters = dict(function.get("parameters") or {})
+        if parameters.get("type") == "object":
+            parameters.setdefault("properties", {})
+            parameters.setdefault("required", [])
+        else:
+            parameters = {"type": "object", "properties": {}, "required": []}
+        function["parameters"] = parameters
+        return {"type": "function", "function": function}
+
+    def reset(self) -> None:
+        self._messages = []
+
+
+def parse_groq_response(payload: Any) -> ProviderResponse:
+    if hasattr(payload, "choices"):
+        choice = payload.choices[0] if payload.choices else None
+        message = getattr(choice, "message", None) if choice else None
+    else:
+        message = payload.get("message") if isinstance(payload, dict) else None
+    if message is None:
+        raise ValueError("malformed Groq response: missing message")
+    content = getattr(message, "content", None)
+    if content is None and isinstance(message, dict):
+        content = message.get("content")
+    final_text = content if isinstance(content, str) else None
+    raw_tool_calls = getattr(message, "tool_calls", None)
+    if raw_tool_calls is None and isinstance(message, dict):
+        raw_tool_calls = message.get("tool_calls")
+    tool_calls: list[ProviderToolCall] = []
+    for raw_call in raw_tool_calls or []:
+        function = getattr(raw_call, "function", None)
+        if function is None and isinstance(raw_call, dict):
+            function = raw_call.get("function")
+        if function is None:
+            raise ValueError("malformed Groq response: missing tool function")
+        name = getattr(function, "name", None) if not isinstance(function, dict) else function.get("name")
+        arguments = getattr(function, "arguments", None) if not isinstance(function, dict) else function.get("arguments")
+        try:
+            parsed_arguments = json.loads(arguments or "{}") if isinstance(arguments, str) else dict(arguments or {})
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"malformed tool arguments for {name}") from exc
+        call_id = getattr(raw_call, "id", None) if not isinstance(raw_call, dict) else raw_call.get("id")
+        tool_calls.append(ProviderToolCall(id=str(call_id or f"call_{len(tool_calls)}"), name=str(name), arguments=parsed_arguments))
+    if final_text is None and not tool_calls:
+        raise ValueError("malformed Groq response: no final text or tool calls")
+    return ProviderResponse(final_text=final_text, tool_calls=tool_calls, raw=payload)
+
+
 def parse_openai_response(payload: dict[str, Any]) -> ProviderResponse:
     tool_calls: list[ProviderToolCall] = []
     final_text = payload.get("output_text")
@@ -233,6 +349,8 @@ def build_provider(provider_name: str, model: str, api_key: str | None = None, t
         return LocalRuleBasedProvider()
     if provider_name == "openai":
         return OpenAIResponsesProvider(model=model, api_key=api_key, timeout_seconds=timeout_seconds)
+    if provider_name == "groq":
+        return GroqProvider(model=model, api_key=api_key, timeout_seconds=timeout_seconds)
     if provider_name == "hosted":
         return HostedProvider(model=model, api_key=api_key)
     if provider_name == "modal":
