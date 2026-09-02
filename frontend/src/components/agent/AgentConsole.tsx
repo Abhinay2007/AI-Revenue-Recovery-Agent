@@ -88,8 +88,9 @@ export function AgentConsole({ initialOrder }: { initialOrder?: string | undefin
           created_at: new Date().toISOString(),
         });
       }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Request failed";
+    } catch {
+      const msg =
+        "Unable to connect to the recovery service. Please check that the backend is running and try again.";
       setMessages((prev) =>
         prev.map((m) =>
           m.loading

@@ -11,8 +11,9 @@ from app.agent.provider import AgentIntent, LLMProvider, ProviderToolCall, build
 from app.agent.schemas import AgentApprovalRequest, AgentChatRequest, AgentResponse
 from app.agent.state import AgentState, PendingAction, ToolCallRecord, pending_approval_store
 from app.core.config import get_default_artifact_path, get_default_dataset_path, get_settings
+from app.integrations.razorpay import RazorpayTestModeAdapter
 from app.tools.audit_tool import AuditTool
-from app.tools.execution_tool import SimulatedRecoveryExecutor
+from app.tools.execution_tool import RazorpayTestModeExecutor, SimulatedRecoveryExecutor
 from app.tools.merchant_tool import MerchantContext, MerchantTool
 from app.tools.order_tool import OrderTool
 from app.tools.policy_tool import PolicyTool
@@ -47,7 +48,12 @@ class AgentToolset:
             MerchantContext(),
         )
         self.audit_tool = audit_tool or AuditTool()
-        self.execution_tool = SimulatedRecoveryExecutor(self.order_tool, self.policy_tool)
+        settings = get_settings()
+        if settings.razorpay_enabled:
+            razorpay_adapter = RazorpayTestModeAdapter.from_settings(settings)
+            self.execution_tool = RazorpayTestModeExecutor(self.order_tool, self.policy_tool, razorpay_adapter)
+        else:
+            self.execution_tool = SimulatedRecoveryExecutor(self.order_tool, self.policy_tool)
 
     def tool_definitions(self) -> list[dict[str, Any]]:
         return [

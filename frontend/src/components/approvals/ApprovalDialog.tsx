@@ -49,8 +49,8 @@ export function ApprovalDialog({
 
       removePendingApproval(item.pending_action_id);
       onSuccess(res.execution_status?.status ?? "SIMULATED_SUCCESS");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Approval failed");
+    } catch {
+      setError("Approval could not be completed. The action was not executed.");
     } finally {
       setLoading(false);
     }

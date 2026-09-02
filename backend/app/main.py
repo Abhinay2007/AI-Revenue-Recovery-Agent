@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import agent, db_health, health, merchant, recovery
+from app.api.routes import agent, db_health, health, merchant, razorpay, recovery
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.init_db import init_db
@@ -42,6 +42,7 @@ app.include_router(db_health.router)
 app.include_router(recovery.router)
 app.include_router(merchant.router)
 app.include_router(agent.router)
+app.include_router(razorpay.router)
 
 
 @app.exception_handler(Exception)

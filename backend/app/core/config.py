@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     llm_request_timeout_seconds: float = Field(default=20.0, alias="LLM_REQUEST_TIMEOUT_SECONDS")
     dataset_path: Path = Field(default_factory=get_default_dataset_path, alias="DATASET_PATH")
     artifact_path: Path = Field(default_factory=get_default_artifact_path, alias="ARTIFACT_PATH")
+    razorpay_key_id: str | None = Field(default=None, alias="RAZORPAY_KEY_ID")
+    razorpay_key_secret: str | None = Field(default=None, alias="RAZORPAY_KEY_SECRET")
+    razorpay_enabled: bool = Field(default=False, alias="RAZORPAY_ENABLED")
+    razorpay_request_timeout_seconds: float = Field(default=10.0, alias="RAZORPAY_REQUEST_TIMEOUT_SECONDS")
+    razorpay_test_order_id: str | None = Field(default=None, alias="RAZORPAY_TEST_ORDER_ID")
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

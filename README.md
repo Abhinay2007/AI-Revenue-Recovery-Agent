@@ -167,6 +167,28 @@ curl -X POST http://localhost:8000/api/v1/agent/approve \
 
 No real payment or customer message is executed in this milestone.
 
+Razorpay Test Mode status:
+
+```bash
+curl http://localhost:8000/api/v1/razorpay/status
+```
+
+Razorpay Test Mode connectivity:
+
+```bash
+curl "http://localhost:8000/api/v1/razorpay/connectivity"
+```
+
+Create a developer/demo Razorpay Test Mode order using paise:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/razorpay/test-orders \
+  -H "Content-Type: application/json" \
+  -d '{"amount":10000,"currency":"INR","receipt":"demo-ORD-0042-0009754","internal_order_id":"ORD-0042-0009754"}'
+```
+
+Razorpay is disabled by default and accepts only test-mode keys. See `docs/razorpay-test-mode.md`.
+
 Real LLM smoke test:
 
 ```bash
@@ -208,6 +230,11 @@ LLM_MODEL
 LLM_API_KEY
 MAX_AGENT_STEPS
 LLM_REQUEST_TIMEOUT_SECONDS
+RAZORPAY_ENABLED
+RAZORPAY_KEY_ID
+RAZORPAY_KEY_SECRET
+RAZORPAY_REQUEST_TIMEOUT_SECONDS
+RAZORPAY_TEST_ORDER_ID
 ```
 
 `DATASET_PATH` resolves the synthetic demo dataset from the project root by default, and the Docker image also includes the dataset at `/app/data/generated/orders.csv`. Use `.env.example` as a safe template. Do not commit `.env`.

@@ -45,6 +45,70 @@ export interface ExecutionResult {
   order_id: string;
   timestamp: string;
   reason: string;
+  razorpay?: RazorpayExecutionMetadata | undefined;
+}
+
+export interface RazorpayExecutionMetadata {
+  mode: "test";
+  razorpay_order_id?: string | null;
+  status?: string | null;
+}
+
+export interface RazorpayConnectivity {
+  enabled: boolean;
+  mode: "test" | "disabled";
+  configured: boolean;
+  reachable: boolean;
+  authentication_successful: boolean;
+  requested_test_resource_found: boolean | null;
+  operation: "list_orders" | "fetch_order";
+  razorpay_order_id_checked: string | null;
+  error_type: string | null;
+  error: string | null;
+}
+
+export interface RazorpayTestOrderRequest {
+  amount: number;
+  currency: string;
+  receipt?: string | undefined;
+  internal_order_id?: string | undefined;
+}
+
+export interface RazorpayTestOrderResponse {
+  mode: "test";
+  created: boolean;
+  internal_order_id?: string | null;
+  razorpay_order_id?: string | null;
+  receipt?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  status?: string | null;
+  mapping_created?: boolean;
+  error_type?: string;
+  error?: string;
+}
+
+export interface RazorpayOrderDetails {
+  id: string;
+  amount: number;
+  currency: string;
+  receipt?: string | null;
+  status: string;
+}
+
+export interface RazorpayMappingResponse {
+  mode: "test" | "disabled";
+  internal_order_id: string;
+  found: boolean;
+  mapping?: {
+    internal_order_id: string;
+    razorpay_order_id: string;
+    razorpay_payment_id?: string | null;
+    receipt?: string | null;
+  };
+  razorpay_order?: RazorpayOrderDetails;
+  error_type?: string;
+  error?: string;
 }
 
 export interface PolicyResult {

@@ -47,9 +47,11 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
           });
         }
       })
-      .catch((err: unknown) => {
+      .catch(() => {
         if (!cancelled)
-          setError(err instanceof Error ? err.message : "Failed to analyze this order");
+          setError(
+            "Unable to investigate this order. Please check that the backend is running and try again.",
+          );
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -100,8 +102,8 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
       } else {
         setError(res.summary || "The recovery service did not return an approval request.");
       }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Recovery request failed");
+    } catch {
+      setError("Unable to request recovery for this order. Please try again.");
     } finally {
       setRequesting(false);
     }
@@ -176,13 +178,13 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
                 <Skeleton className="h-4" />
                 <Skeleton className="h-4 w-2/3" />
               </div>
-            // ) : error && !rec ? (
+            ) : // ) : error && !rec ? (
             //   <ErrorState
             //     title="Analysis unavailable"
             //     message={error}
             //     onRetry={() => setAnalysis(null)}
             //   />
-            ) : rec ? (
+            rec ? (
               <div className="space-y-3">
                 <ActionTag label={formatAction(rec.recommended_action)} />
                 <dl className="divide-y divide-border overflow-hidden rounded-lg border border-border">
@@ -311,7 +313,7 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
                 className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 {requesting ? <Loader2 size={13} className="animate-spin" /> : null}
-                Request recovery
+                Recover order
               </button>
             </div>
           )}

@@ -16,6 +16,8 @@ import { RiskDistribution } from "@/components/dashboard/RiskDistribution";
 import { ActionDistributionChart } from "@/components/dashboard/ActionDistributionChart";
 import { PriorityOrdersTable } from "@/components/recovery/PriorityOrdersTable";
 import { OrderDrawer } from "@/components/recovery/OrderDrawer";
+import { RazorpayConnectionCard } from "@/components/integrations/RazorpayConnectionCard";
+import { RazorpayTestOrderPanel } from "@/components/integrations/RazorpayTestOrderPanel";
 
 export const Route = createFileRoute("/overview")({
   head: () => ({
@@ -96,6 +98,11 @@ function OverviewPage() {
           loading={opportunity.isLoading}
           unavailable={!opportunity.isLoading && !o}
         />
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <RazorpayConnectionCard />
+        <RazorpayTestOrderPanel />
       </section>
 
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-2">

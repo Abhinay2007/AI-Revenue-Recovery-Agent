@@ -21,8 +21,10 @@ def fail(message: str) -> int:
 
 
 def validate_analysis_response(response) -> None:
+    if response.status == "FAILED":
+        raise AssertionError(f"agent returned failure: {response.summary}")
     text = response.natural_language_response
-    if ORDER_ID not in (response.order_id or text):
+    if response.order_id != ORDER_ID and ORDER_ID not in text:
         raise AssertionError("response does not include the requested order ID")
     if response.risk is None or "rto_probability" not in response.risk:
         raise AssertionError("response does not include tool-derived risk information")
@@ -53,8 +55,10 @@ def run_real_analysis() -> object:
         AgentChatRequest(
             session_id="smoke-real-llm",
             message=(
-                f"Analyze order {ORDER_ID}. Tell me its RTO risk, revenue at risk, "
-                "recommended recovery action, and why."
+                f"Analyze order {ORDER_ID}. Use the typed tools to get the order, "
+                "RTO risk, revenue at risk, and recovery recommendation. Then tell me "
+                "the grounded RTO risk, revenue at risk, recommended recovery action, "
+                "and why. Do not execute anything."
             ),
         )
     )

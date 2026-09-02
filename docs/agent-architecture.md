@@ -23,6 +23,8 @@ Approval Gate
  ↓
 Execution Adapter
  ↓
+Razorpay Test Mode Adapter (optional)
+ ↓
 Audit
 ```
 
@@ -66,6 +68,7 @@ Tools expose strict Pydantic schemas and deterministic behavior where applicable
 - `PolicyTool`: rechecks merchant policy for a requested action.
 - `MerchantTool`: calculates deterministic aggregate revenue and recovery summaries for the synthetic demo merchant.
 - `SimulatedRecoveryExecutor`: performs safe simulated execution only.
+- `RazorpayTestModeExecutor`: optionally wraps the existing approval and policy validation, then calls the Razorpay Test Mode adapter for safe test operations.
 - `AuditTool`: appends JSON-serializable in-memory audit events.
 
 The agent never scans raw CSV content directly to make decisions. It uses typed tools only; no tool exposes arbitrary SQL, filesystem reads, Python execution, or raw dataset access to the model.
@@ -237,7 +240,7 @@ Prompt-injection-style user instructions are treated as untrusted. Requests such
 
 ## Execution Boundary
 
-The current executor is `SimulatedRecoveryExecutor`. It returns:
+The default executor is `SimulatedRecoveryExecutor`. It returns:
 
 ```text
 SIMULATED_SUCCESS
@@ -247,15 +250,65 @@ FAILED
 
 It does not call Razorpay, charge customers, create mandates, send WhatsApp messages, send SMS, or contact real customers.
 
-Future adapter shape:
+When `RAZORPAY_ENABLED=true`, the backend uses `RazorpayTestModeExecutor`. It still runs only after the existing approval endpoint verifies:
+
+- pending action exists
+- action is not expired or already executed
+- explicit approval was provided
+- current recovery decision still matches the pending recommendation
+- merchant policy still passes
+
+Only after those checks may it call the Razorpay Test Mode adapter. The LLM never receives Razorpay credentials and cannot call Razorpay directly.
+
+Executor shape:
 
 ```text
 RecoveryExecutor
 ├── SimulatedRecoveryExecutor
-└── RazorpayRecoveryExecutor (future)
+├── RazorpayTestModeExecutor
+└── RazorpayLiveExecutor (not implemented)
 ```
 
-There is no fake Razorpay implementation in this milestone.
+There is no live Razorpay implementation in this milestone.
+
+## Razorpay Test Mode
+
+Razorpay Test Mode is disabled by default.
+
+```text
+RAZORPAY_ENABLED=false
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_REQUEST_TIMEOUT_SECONDS=10
+```
+
+Safety behavior:
+
+- accepts only `rzp_test_` key IDs
+- rejects `rzp_live_*` keys
+- fails startup of the Razorpay-enabled executor when credentials are missing
+- never logs or returns `RAZORPAY_KEY_SECRET`
+- performs no refunds, payouts, live charges, or destructive operations
+- keeps internal synthetic order IDs distinct from Razorpay order/payment IDs
+
+The status endpoint is:
+
+```text
+GET /api/v1/razorpay/status
+```
+
+It returns safe metadata such as enabled/configured/mode and never returns credentials.
+
+Identifier mapping:
+
+```text
+internal_order_id: ORD-0042-0009754
+razorpay receipt: rr_ORD-0042-0009754
+razorpay_order_id: returned by Razorpay Test Mode
+razorpay_payment_id: returned only when available
+```
+
+See `docs/razorpay-test-mode.md` for manual test instructions.
 
 ## Audit Trail
 
@@ -298,6 +351,10 @@ LLM_MODEL
 LLM_API_KEY
 MAX_AGENT_STEPS
 LLM_REQUEST_TIMEOUT_SECONDS
+RAZORPAY_ENABLED
+RAZORPAY_KEY_ID
+RAZORPAY_KEY_SECRET
+RAZORPAY_REQUEST_TIMEOUT_SECONDS
 ```
 
 Supported shape:
@@ -342,7 +399,7 @@ A future Modal-backed provider can implement the same `LLMProvider.plan()` inter
 ## Current Limitations
 
 - OpenAI and Groq providers are API-ready; automated tests use mocked provider clients and do not make external API calls.
-- No Razorpay integration.
+- Razorpay support is Test Mode only and disabled by default.
 - No real payment execution.
 - No customer messaging.
 - No frontend.

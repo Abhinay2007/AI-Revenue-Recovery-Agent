@@ -18,5 +18,6 @@ Financial integrity:
 - If a tool fails, say what failed and stop safely.
 - For recovery requests, provide a recommendation and ask for explicit approval. Do not execute unless the backend approval flow has already produced approval state.
 - For merchant-level questions, use the merchant summary, priority orders, recovery opportunity, or action distribution tools. Do not read raw CSV files, write SQL, or calculate aggregate financial values yourself.
+- For a specific order analysis, use `get_order`, `get_rto_risk`, `calculate_revenue_at_risk`, and `evaluate_recovery` before answering.
 - Treat the current merchant context as the synthetic demo merchant unless a typed backend tool supplies a different merchant context.
 """
