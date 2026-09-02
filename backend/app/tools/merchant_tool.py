@@ -92,7 +92,7 @@ class MerchantTool:
 
     def get_priority_recovery_orders(
         self,
-        limit: int = 10,
+        limit: int = 250,
         minimum_rto_probability: float = 0.30,
         minimum_order_value: float = 0.0,
     ) -> dict[str, Any]:
@@ -194,14 +194,13 @@ class MerchantTool:
             "priority": {
                 "merchant_id": self.merchant_context.merchant_id,
                 "ranking_metric": "expected_revenue_at_risk",
-                "limit": 10,
+                "limit": 250,
                 "minimum_rto_probability": 0.30,
                 "minimum_order_value": 0.0,
                 "orders": sorted(
                     [order for order in scored if order["rto_probability"] >= 0.30],
                     key=lambda order: order["expected_revenue_at_risk"],
                     reverse=True,
-                )[:10],
+                ),
             },
         }
-

@@ -7,7 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.agent.prompts import AGENT_SYSTEM_PROMPT
-from app.agent.provider import AgentIntent, LLMProvider, ProviderToolCall, build_provider
+from app.agent.provider import AgentIntent, LLMProvider, LocalRuleBasedProvider, ProviderToolCall, build_provider
 from app.agent.schemas import AgentApprovalRequest, AgentChatRequest, AgentResponse
 from app.agent.state import AgentState, PendingAction, ToolCallRecord, pending_approval_store
 from app.core.config import get_default_artifact_path, get_default_dataset_path, get_settings
@@ -125,7 +125,7 @@ class AgentToolset:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 250},
                         "minimum_rto_probability": {"type": "number", "minimum": 0, "maximum": 1},
                         "minimum_order_value": {"type": "number", "minimum": 0},
                     },
@@ -148,7 +148,7 @@ class AgentToolset:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 250},
                         "minimum_rto_probability": {"type": "number", "minimum": 0, "maximum": 1},
                         "minimum_order_value": {"type": "number", "minimum": 0},
                     },
@@ -392,6 +392,11 @@ class RevenueRecoveryAgent:
 
     def _chat_with_tool_loop(self, state: AgentState) -> AgentResponse:
         self.provider.reset()
+        # A recommendation from tool output must not open the approval gate.
+        # Only an explicit execution intent from the user may do that.
+        request_intent = LocalRuleBasedProvider().plan(state.user_request)
+        state.intent = request_intent.intent.value
+        state.order_id = request_intent.order_id
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": AGENT_SYSTEM_PROMPT},
             {"role": "user", "content": state.user_request},
@@ -476,7 +481,11 @@ class RevenueRecoveryAgent:
         pending_action_id = None
         recommendation = state.recovery_result
         policy = state.policy_result
-        if recommendation and recommendation.get("recommended_action") != "NO_ACTION":
+        if (
+            state.intent == AgentIntent.REQUEST_EXECUTION.value
+            and recommendation
+            and recommendation.get("recommended_action") != "NO_ACTION"
+        ):
             if policy is None:
                 policy = self.tools.policy_tool.check_recovery_policy(
                     recommendation["order_id"],
@@ -698,7 +707,7 @@ class RevenueRecoveryAgent:
         )
 
     def _priority_recovery(self, state: AgentState) -> AgentResponse:
-        query = {"limit": 10, "minimum_rto_probability": 0.30, "minimum_order_value": 0.0}
+        query = {"limit": 250, "minimum_rto_probability": 0.30, "minimum_order_value": 0.0}
         try:
             result = self._record_tool(
                 state,

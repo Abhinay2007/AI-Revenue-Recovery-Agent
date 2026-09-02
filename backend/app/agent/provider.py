@@ -85,10 +85,10 @@ class LocalRuleBasedProvider(LLMProvider):
             return IntentPlan(AgentIntent.ACTION_DISTRIBUTION)
         if any(term in normalized for term in ["highest revenue", "revenue at risk", "at-risk orders"]) and not order_id:
             return IntentPlan(AgentIntent.FIND_REVENUE_AT_RISK)
+        if any(term in normalized for term in ["should i recover", "should we recover", "what should", "recommend", "do about", "do with"]):
+            return IntentPlan(AgentIntent.RECOMMEND_RECOVERY, order_id)
         if any(term in normalized for term in ["recover", "execute", "run recovery"]):
             return IntentPlan(AgentIntent.REQUEST_EXECUTION, order_id)
-        if any(term in normalized for term in ["what should", "recommend", "do about", "do with"]):
-            return IntentPlan(AgentIntent.RECOMMEND_RECOVERY, order_id)
         if any(term in normalized for term in ["analyze", "inspect", "check", "risk"]) and order_id:
             return IntentPlan(AgentIntent.INSPECT_ORDER, order_id)
         if order_id:

@@ -60,6 +60,25 @@ def test_agent_recover_requires_approval_and_does_not_execute():
     assert "Approval required" in response.natural_language_response
 
 
+def test_recommendation_question_does_not_create_pending_action():
+    agent = make_agent()
+    response = agent.chat(AgentChatRequest(message=f"Should I recover {ACTIONABLE_ORDER_ID}?", session_id="s-recommend"))
+
+    assert response.status == "ANALYSIS"
+    assert response.approval_required is False
+    assert response.pending_action_id is None
+    assert response.execution_status is None
+
+
+def test_explicit_execute_request_requires_approval():
+    agent = make_agent()
+    response = agent.chat(AgentChatRequest(message=f"Execute recovery for {ACTIONABLE_ORDER_ID}", session_id="s-execute"))
+
+    assert response.approval_required is True
+    assert response.pending_action_id is not None
+    assert response.execution_status is None
+
+
 def test_valid_approval_executes_simulated_action_and_audits():
     agent = make_agent()
     recommendation = agent.chat(AgentChatRequest(message=f"Recover {ACTIONABLE_ORDER_ID}", session_id="s3"))

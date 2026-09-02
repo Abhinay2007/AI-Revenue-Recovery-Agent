@@ -128,7 +128,7 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
       >
         <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <p className="label-xs">Order</p>
+            <p className="label-xs">Internal synthetic order</p>
             <p className="num mt-1 text-[13px] font-semibold">{order.order_id}</p>
             <div className="mt-2 flex items-center gap-2">
               <span className="num text-xl font-semibold">{formatINR(order.amount)}</span>

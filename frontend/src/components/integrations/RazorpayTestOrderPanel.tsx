@@ -67,9 +67,10 @@ export function RazorpayTestOrderPanel() {
           <ShoppingBag size={16} />
         </span>
         <div>
-          <h2 className="text-sm font-semibold">Test Mode order mapping</h2>
+          <h2 className="text-sm font-semibold">Razorpay Test Mode order</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Create and inspect an internal order link. No live payment is made.
+            Create and inspect a separate Razorpay resource mapped to an internal order. No live
+            payment is made.
           </p>
         </div>
       </div>
@@ -154,7 +155,7 @@ export function RazorpayTestOrderPanel() {
       )}
       {mapping?.found && mapping.razorpay_order && (
         <div className="mt-3 rounded-md border border-border bg-canvas p-3 text-xs">
-          <p className="font-semibold">Mapped Razorpay order</p>
+          <p className="font-semibold">Razorpay resource mapped to this internal order</p>
           <p className="mt-1 num text-muted-foreground">
             {mapping.razorpay_order.id} · {mapping.razorpay_order.status}
           </p>
