@@ -22,12 +22,12 @@ class RecoveryTool:
         self.policy = policy or MerchantPolicy()
         self.assumptions = assumptions or RecoveryAssumptions()
 
-    def evaluate_recovery(self, order_id: str, attempt_count: int = 0) -> dict:
+    def evaluate_recovery(self, order_id: str, attempt_count: int = 0, rto_probability: float | None = None) -> dict:
         order = self.order_tool.get_order(order_id)
-        risk = self.risk_tool.get_rto_risk(order_id)
+        probability = rto_probability if rto_probability is not None else self.risk_tool.get_rto_risk(order_id).rto_probability
         return decide_recovery_action(
             order={"order_id": order.order_id, "amount": order.amount, "attempt_count": attempt_count},
-            rto_probability=risk.rto_probability,
+            rto_probability=probability,
             merchant_policy=self.policy,
             recovery_assumptions=self.assumptions,
         )

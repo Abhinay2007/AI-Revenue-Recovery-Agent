@@ -33,3 +33,14 @@ class RiskTool:
             reasons=prediction["explanation"],
         )
 
+    def get_rto_probability(self, order_id: str) -> float:
+        order = self.order_tool.get_internal_record(order_id)
+        if order.get("payment_method") != "COD":
+            raise ToolError("RTO risk model is currently available only for COD orders")
+        return self._load_predictor().predict_probability(order)
+
+    def get_rto_probabilities(self, orders: list[dict]) -> list[float]:
+        if any(order.get("payment_method") != "COD" for order in orders):
+            raise ToolError("RTO risk model is currently available only for COD orders")
+        return self._load_predictor().predict_probabilities(orders)
+

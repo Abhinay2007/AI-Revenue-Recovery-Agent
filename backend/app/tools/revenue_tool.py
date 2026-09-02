@@ -13,10 +13,10 @@ class RevenueTool:
         self.order_tool = order_tool
         self.risk_tool = risk_tool
 
-    def calculate_revenue_at_risk(self, order_id: str) -> RevenueRiskResult:
+    def calculate_revenue_at_risk(self, order_id: str, rto_probability: float | None = None) -> RevenueRiskResult:
         order = self.order_tool.get_order(order_id)
-        risk = self.risk_tool.get_rto_risk(order_id)
-        revenue = calculate_revenue_at_risk(order.amount, risk.rto_probability)
+        probability = rto_probability if rto_probability is not None else self.risk_tool.get_rto_risk(order_id).rto_probability
+        revenue = calculate_revenue_at_risk(order.amount, probability)
         return RevenueRiskResult(
             order_id=order_id,
             order_amount=float(revenue.order_amount),
