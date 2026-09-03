@@ -12,6 +12,8 @@ build/
 *.egg-info/
 data/generated/*.csv
 data/generated/models/*
+!data/generated/orders.csv
+!data/generated/models/rto_predictor.joblib
 !data/generated/.gitkeep
 !data/generated/models/.gitkeep
 .DS_Store
