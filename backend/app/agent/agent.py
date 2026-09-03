@@ -7,12 +7,13 @@ from typing import Any
 from uuid import uuid4
 
 from app.agent.prompts import AGENT_SYSTEM_PROMPT
-from app.agent.provider import AgentIntent, LLMProvider, ProviderToolCall, build_provider
+from app.agent.provider import AgentIntent, LLMProvider, LocalRuleBasedProvider, ProviderToolCall, build_provider
 from app.agent.schemas import AgentApprovalRequest, AgentChatRequest, AgentResponse
 from app.agent.state import AgentState, PendingAction, ToolCallRecord, pending_approval_store
-from app.core.config import get_settings
+from app.core.config import get_default_artifact_path, get_default_dataset_path, get_settings
+from app.integrations.razorpay import RazorpayTestModeAdapter
 from app.tools.audit_tool import AuditTool
-from app.tools.execution_tool import SimulatedRecoveryExecutor
+from app.tools.execution_tool import RazorpayTestModeExecutor, SimulatedRecoveryExecutor
 from app.tools.merchant_tool import MerchantContext, MerchantTool
 from app.tools.order_tool import OrderTool
 from app.tools.policy_tool import PolicyTool
@@ -28,12 +29,14 @@ logger = logging.getLogger(__name__)
 class AgentToolset:
     def __init__(
         self,
-        dataset_path: Path = Path("data/generated/orders.csv"),
-        artifact_path: Path = Path("data/generated/models/rto_predictor.joblib"),
+        dataset_path: Path | None = None,
+        artifact_path: Path | None = None,
         audit_tool: AuditTool | None = None,
     ) -> None:
-        self.order_tool = OrderTool(dataset_path)
-        self.risk_tool = RiskTool(self.order_tool, artifact_path)
+        resolved_dataset_path = dataset_path or get_default_dataset_path()
+        resolved_artifact_path = artifact_path or get_default_artifact_path()
+        self.order_tool = OrderTool(resolved_dataset_path)
+        self.risk_tool = RiskTool(self.order_tool, resolved_artifact_path)
         self.revenue_tool = RevenueTool(self.order_tool, self.risk_tool)
         self.recovery_tool = RecoveryTool(self.order_tool, self.risk_tool)
         self.policy_tool = PolicyTool(self.recovery_tool)
@@ -45,7 +48,12 @@ class AgentToolset:
             MerchantContext(),
         )
         self.audit_tool = audit_tool or AuditTool()
-        self.execution_tool = SimulatedRecoveryExecutor(self.order_tool, self.policy_tool)
+        settings = get_settings()
+        if settings.razorpay_enabled:
+            razorpay_adapter = RazorpayTestModeAdapter.from_settings(settings)
+            self.execution_tool = RazorpayTestModeExecutor(self.order_tool, self.policy_tool, razorpay_adapter)
+        else:
+            self.execution_tool = SimulatedRecoveryExecutor(self.order_tool, self.policy_tool)
 
     def tool_definitions(self) -> list[dict[str, Any]]:
         return [
@@ -117,7 +125,7 @@ class AgentToolset:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 250},
                         "minimum_rto_probability": {"type": "number", "minimum": 0, "maximum": 1},
                         "minimum_order_value": {"type": "number", "minimum": 0},
                     },
@@ -140,7 +148,7 @@ class AgentToolset:
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 250},
                         "minimum_rto_probability": {"type": "number", "minimum": 0, "maximum": 1},
                         "minimum_order_value": {"type": "number", "minimum": 0},
                     },
@@ -382,8 +390,30 @@ class RevenueRecoveryAgent:
         self._log_result(response)
         return response
 
+    def request_recovery(self, order_id: str, action: str, session_id: str | None = None) -> AgentResponse:
+        """Create a pending action using deterministic analysis, without invoking the provider."""
+        state = AgentState(
+            session_id=session_id or f"session_{uuid4().hex}",
+            user_request=f"Request recovery for {order_id}",
+            intent=AgentIntent.REQUEST_EXECUTION.value,
+            order_id=order_id,
+        )
+        response = self._analyze_order(
+            state,
+            require_approval=True,
+            requested_action=action,
+            audit_tool_name="recovery.request",
+        )
+        self._log_result(response)
+        return response
+
     def _chat_with_tool_loop(self, state: AgentState) -> AgentResponse:
         self.provider.reset()
+        # A recommendation from tool output must not open the approval gate.
+        # Only an explicit execution intent from the user may do that.
+        request_intent = LocalRuleBasedProvider().plan(state.user_request)
+        state.intent = request_intent.intent.value
+        state.order_id = request_intent.order_id
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": AGENT_SYSTEM_PROMPT},
             {"role": "user", "content": state.user_request},
@@ -468,7 +498,11 @@ class RevenueRecoveryAgent:
         pending_action_id = None
         recommendation = state.recovery_result
         policy = state.policy_result
-        if recommendation and recommendation.get("recommended_action") != "NO_ACTION":
+        if (
+            state.intent == AgentIntent.REQUEST_EXECUTION.value
+            and recommendation
+            and recommendation.get("recommended_action") != "NO_ACTION"
+        ):
             if policy is None:
                 policy = self.tools.policy_tool.check_recovery_policy(
                     recommendation["order_id"],
@@ -555,7 +589,13 @@ class RevenueRecoveryAgent:
 
         return json.dumps(value, default=str)
 
-    def _analyze_order(self, state: AgentState, require_approval: bool) -> AgentResponse:
+    def _analyze_order(
+        self,
+        state: AgentState,
+        require_approval: bool,
+        requested_action: str | None = None,
+        audit_tool_name: str = "agent.chat",
+    ) -> AgentResponse:
         try:
             order = self._record_tool(state, "order_tool.get_order", {"order_id": state.order_id}, lambda: self.tools.order_tool.get_order(state.order_id or "").model_dump())
             risk = self._record_tool(state, "risk_tool.get_rto_risk", {"order_id": state.order_id}, lambda: self.tools.risk_tool.get_rto_risk(state.order_id or "").model_dump())
@@ -577,6 +617,13 @@ class RevenueRecoveryAgent:
         pending_action_id = None
         approval_required = False
 
+        if requested_action is not None and requested_action != recovery["recommended_action"]:
+            response = self._failure(
+                state,
+                "Requested action does not match the current deterministic recovery recommendation. No action was created.",
+            )
+            return response
+
         if require_approval and recovery["recommended_action"] != "NO_ACTION" and policy["allowed"]:
             pending = pending_approval_store.create(
                 PendingAction(
@@ -595,7 +642,7 @@ class RevenueRecoveryAgent:
         audit = self.tools.audit_tool.create_audit_event(
             session_id=state.session_id,
             order_id=state.order_id,
-            tool="agent.chat",
+            tool=audit_tool_name,
             inputs_summary={"intent": "REQUEST_EXECUTION" if require_approval else "ANALYZE"},
             outputs_summary={"recommended_action": recovery["recommended_action"]},
             decision=recovery,
@@ -690,7 +737,7 @@ class RevenueRecoveryAgent:
         )
 
     def _priority_recovery(self, state: AgentState) -> AgentResponse:
-        query = {"limit": 10, "minimum_rto_probability": 0.30, "minimum_order_value": 0.0}
+        query = {"limit": 250, "minimum_rto_probability": 0.30, "minimum_order_value": 0.0}
         try:
             result = self._record_tool(
                 state,

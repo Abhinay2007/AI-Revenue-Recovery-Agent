@@ -57,7 +57,8 @@ def test_multi_step_tool_loop_returns_tool_grounded_values():
     assert response.revenue_at_risk is not None
     assert "999999" not in response.natural_language_response
     assert f"{response.revenue_at_risk['expected_revenue_at_risk']:.2f}" in response.natural_language_response
-    assert response.approval_required is True
+    assert response.approval_required is False
+    assert response.pending_action_id is None
 
 
 def test_maximum_step_exhaustion_stops_safely():
@@ -146,4 +147,3 @@ def test_tool_loop_approval_flow_still_uses_backend_gate():
 
     assert recommendation.approval_required is True
     assert approval.execution_status["status"] == "SIMULATED_SUCCESS"
-

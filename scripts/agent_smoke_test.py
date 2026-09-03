@@ -21,8 +21,10 @@ def fail(message: str) -> int:
 
 
 def validate_analysis_response(response) -> None:
+    if response.status == "FAILED":
+        raise AssertionError(f"agent returned failure: {response.summary}")
     text = response.natural_language_response
-    if ORDER_ID not in (response.order_id or text):
+    if response.order_id != ORDER_ID and ORDER_ID not in text:
         raise AssertionError("response does not include the requested order ID")
     if response.risk is None or "rto_probability" not in response.risk:
         raise AssertionError("response does not include tool-derived risk information")
@@ -38,12 +40,12 @@ def validate_analysis_response(response) -> None:
 
 def run_real_analysis() -> object:
     settings = get_settings()
-    if settings.llm_provider != "openai":
-        raise RuntimeError("Set LLM_PROVIDER=openai for the real smoke test")
+    if settings.llm_provider not in {"openai", "groq"}:
+        raise RuntimeError("Set LLM_PROVIDER=openai or groq for the real smoke test")
     if not settings.llm_api_key:
         raise RuntimeError("Set LLM_API_KEY for the real smoke test")
     if not settings.llm_model or settings.llm_model == "rule-based-recovery-agent":
-        raise RuntimeError("Set LLM_MODEL to the configured OpenAI model")
+        raise RuntimeError("Set LLM_MODEL to the configured model")
 
     from app.agent.agent import RevenueRecoveryAgent
     from app.agent.schemas import AgentChatRequest
@@ -53,8 +55,10 @@ def run_real_analysis() -> object:
         AgentChatRequest(
             session_id="smoke-real-llm",
             message=(
-                f"Analyze order {ORDER_ID}. Tell me its RTO risk, revenue at risk, "
-                "recommended recovery action, and why."
+                f"Analyze order {ORDER_ID}. Use the typed tools to get the order, "
+                "RTO risk, revenue at risk, and recovery recommendation. Then tell me "
+                "the grounded RTO risk, revenue at risk, recommended recovery action, "
+                "and why. Do not execute anything."
             ),
         )
     )
@@ -114,7 +118,7 @@ def main() -> int:
         return fail(str(exc))
 
     print("Real LLM smoke test passed.")
-    print(f"Provider/model: openai/{get_settings().llm_model}")
+    print(f"Provider/model: {get_settings().llm_provider}/{get_settings().llm_model}")
     print("Tool calls:", ", ".join(call["tool_name"] for call in real_response.tool_calls if "tool_name" in call))
     print("\nGrounded response:\n")
     print(real_response.natural_language_response)

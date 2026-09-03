@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Enum, Integer, Numeric, String, func
+from sqlalchemy import Boolean, DateTime, Enum, Integer, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -44,9 +44,26 @@ class Order(Base):
     product_category: Mapped[str] = mapped_column(String(64), nullable=False)
     is_first_order: Mapped[bool] = mapped_column(Boolean, nullable=False)
     rto_outcome: Mapped[OrderOutcome | None] = mapped_column(Enum(OrderOutcome), nullable=True)
+    source: Mapped[str] = mapped_column(String(32), default="synthetic", server_default="synthetic", nullable=False)
+    razorpay_order_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    razorpay_payment_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    external_receipt: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
 
+
+class RazorpayOrderMapping(Base):
+    __tablename__ = "razorpay_order_mappings"
+    __table_args__ = (UniqueConstraint("internal_order_id", name="uq_rzp_mapping_internal_order"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    internal_order_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    razorpay_order_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    razorpay_payment_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    receipt: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

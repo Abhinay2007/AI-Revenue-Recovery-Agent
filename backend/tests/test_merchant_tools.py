@@ -43,6 +43,15 @@ def test_priority_orders_apply_risk_and_amount_filters():
     assert all(order["amount"] >= 5000 for order in result["orders"])
 
 
+def test_default_priority_orders_include_all_eligible_orders():
+    tools = AgentToolset()
+    result = tools.merchant_tool.get_priority_recovery_orders()
+    eligible = [order for order in tools.merchant_tool._scored_cod_orders() if order["rto_probability"] >= 0.30]
+
+    assert result["limit"] == 250
+    assert len(result["orders"]) == len(eligible)
+
+
 def test_recovery_opportunity_summary_matches_underlying_scored_orders():
     tools = AgentToolset()
     scored = tools.merchant_tool._scored_cod_orders()

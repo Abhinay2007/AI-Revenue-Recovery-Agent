@@ -8,9 +8,10 @@ from typing import Any
 import joblib
 import pandas as pd
 
+from app.core.config import get_default_artifact_path
 from app.ml.features import MODEL_FEATURES, build_feature_frame
 
-DEFAULT_ARTIFACT_PATH = Path("data/generated/models/rto_predictor.joblib")
+DEFAULT_ARTIFACT_PATH = get_default_artifact_path()
 
 
 @dataclass(frozen=True)
@@ -43,13 +44,23 @@ class RTOPredictor:
     def predict(self, order_features: dict[str, Any]) -> dict[str, Any]:
         frame = pd.DataFrame([order_features])
         features = build_feature_frame(frame)
-        raw_probability = float(self.pipeline.predict_proba(features)[:, 1][0])
-        probability = float(self.calibrator.predict_proba([[raw_probability]])[:, 1][0])
+        probability = self.probability_for_feature_frame(features)
         return {
             "rto_probability": probability,
             "risk_level": assign_risk_level(probability, self.risk_thresholds),
             "explanation": self.explain(features),
         }
+
+    def predict_probability(self, order_features: dict[str, Any]) -> float:
+        frame = pd.DataFrame([order_features])
+        return self.probability_for_feature_frame(build_feature_frame(frame))
+
+    def predict_probabilities(self, order_features: list[dict[str, Any]]) -> list[float]:
+        frame = pd.DataFrame(order_features)
+        features = build_feature_frame(frame)
+        raw_probabilities = self.pipeline.predict_proba(features)[:, 1]
+        probabilities = self.calibrator.predict_proba(raw_probabilities.reshape(-1, 1))[:, 1]
+        return [float(probability) for probability in probabilities]
 
     def probability_for_feature_frame(self, feature_frame: pd.DataFrame) -> float:
         raw_probability = float(self.pipeline.predict_proba(feature_frame)[:, 1][0])

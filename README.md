@@ -28,7 +28,7 @@ Implemented now:
 - Prediction service with risk levels and model-derived explanation metadata
 - Deterministic recovery decision engine with policy guardrails and audit event output
 - Synthetic recovery simulator foundation
-- AI revenue recovery agent with local, mock, and OpenAI Responses API providers
+- AI revenue recovery agent with local, mock, OpenAI Responses API, and Groq providers
 - Typed tools for order analysis, risk, revenue-at-risk, recovery recommendations, policy checks, simulated execution, audit, and merchant-level summaries
 - Explicit approval API before simulated recovery execution
 - pytest coverage for the foundation
@@ -167,16 +167,38 @@ curl -X POST http://localhost:8000/api/v1/agent/approve \
 
 No real payment or customer message is executed in this milestone.
 
+Razorpay Test Mode status:
+
+```bash
+curl http://localhost:8000/api/v1/razorpay/status
+```
+
+Razorpay Test Mode connectivity:
+
+```bash
+curl "http://localhost:8000/api/v1/razorpay/connectivity"
+```
+
+Create a developer/demo Razorpay Test Mode order using paise:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/razorpay/test-orders \
+  -H "Content-Type: application/json" \
+  -d '{"amount":10000,"currency":"INR","receipt":"demo-ORD-0042-0009754","internal_order_id":"ORD-0042-0009754"}'
+```
+
+Razorpay is disabled by default and accepts only test-mode keys. See `docs/razorpay-test-mode.md`.
+
 Real LLM smoke test:
 
 ```bash
-LLM_PROVIDER=openai \
+LLM_PROVIDER=groq \
 LLM_MODEL=<configured-model> \
 LLM_API_KEY=<secret> \
 .venv/bin/python scripts/agent_smoke_test.py
 ```
 
-The smoke test makes one real LLM request, verifies that at least one typed tool was exercised, checks that financial values are grounded in tool outputs, and separately verifies the approval gate with the offline provider. The normal pytest suite does not call external APIs.
+The smoke test makes one real LLM request, verifies that at least one typed tool was exercised, checks that financial values are grounded in tool outputs, and separately verifies the approval gate with the offline provider. Both OpenAI and Groq are interchangeable LLM providers: they orchestrate typed tools while deterministic backend services remain authoritative for financial calculations, recovery economics, policy, approval, execution, and audit. The normal pytest suite does not call external APIs.
 
 ## Synthetic Data
 
@@ -201,12 +223,18 @@ Configuration is read from environment variables:
 ```text
 APP_ENV
 DATABASE_URL
+DATASET_PATH
 LOG_LEVEL
 LLM_PROVIDER
 LLM_MODEL
 LLM_API_KEY
 MAX_AGENT_STEPS
 LLM_REQUEST_TIMEOUT_SECONDS
+RAZORPAY_ENABLED
+RAZORPAY_KEY_ID
+RAZORPAY_KEY_SECRET
+RAZORPAY_REQUEST_TIMEOUT_SECONDS
+RAZORPAY_TEST_ORDER_ID
 ```
 
-Use `.env.example` as a safe template. Do not commit `.env`.
+`DATASET_PATH` resolves the synthetic demo dataset from the project root by default, and the Docker image also includes the dataset at `/app/data/generated/orders.csv`. Use `.env.example` as a safe template. Do not commit `.env`.

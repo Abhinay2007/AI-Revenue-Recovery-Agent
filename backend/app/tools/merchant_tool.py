@@ -47,23 +47,26 @@ class MerchantTool:
 
     def _scored_cod_orders(self) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
-        for _, record in self._cod_population().iterrows():
+        records = self._cod_population().to_dict("records")
+        probabilities = self.risk_tool.get_rto_probabilities(records)
+        for record, probability in zip(records, probabilities, strict=True):
             order_id = str(record["order_id"])
-            risk = self.risk_tool.get_rto_risk(order_id)
-            revenue = self.revenue_tool.calculate_revenue_at_risk(order_id)
-            decision = self.recovery_tool.evaluate_recovery(order_id)
+            revenue = self.revenue_tool.calculate_revenue_at_risk(order_id, rto_probability=probability)
+            decision = self.recovery_tool.evaluate_recovery(order_id, rto_probability=probability)
             rows.append(
                 {
                     "order_id": order_id,
                     "amount": float(record["amount"]),
                     "payment_method": "COD",
-                    "rto_probability": risk.rto_probability,
-                    "risk_level": risk.risk_level,
+                    "rto_probability": probability,
+                    "risk_level": "HIGH" if probability >= 0.55 else "MEDIUM" if probability >= 0.35 else "LOW",
                     "expected_revenue_at_risk": revenue.expected_revenue_at_risk,
                     "recommended_action": decision["recommended_action"],
                     "expected_gross_recovery": decision["expected_recovered_revenue"],
                     "expected_intervention_cost": decision["expected_intervention_cost"],
                     "expected_net_recovery": decision["expected_net_recovery"],
+                    "source": str(record.get("source") or "synthetic"),
+                    "razorpay_order_id": record.get("razorpay_order_id"),
                 }
             )
         return rows
@@ -91,7 +94,7 @@ class MerchantTool:
 
     def get_priority_recovery_orders(
         self,
-        limit: int = 10,
+        limit: int = 250,
         minimum_rto_probability: float = 0.30,
         minimum_order_value: float = 0.0,
     ) -> dict[str, Any]:
@@ -144,3 +147,62 @@ class MerchantTool:
             "distribution": rows,
         }
 
+    def get_dashboard_analytics(self) -> dict[str, Any]:
+        scored = self._scored_cod_orders()
+        frame = self._all_population()
+        cod = frame.loc[frame["payment_method"] == "COD"]
+        prepaid = frame.loc[frame["payment_method"] == "PREPAID"]
+        rto = cod.loc[cod["rto_outcome"] == "RTO"] if "rto_outcome" in cod.columns else cod.iloc[0:0]
+        positive = [
+            order
+            for order in scored
+            if order["expected_net_recovery"] > 0 and order["recommended_action"] != InterventionAction.NO_ACTION.value
+        ]
+        distribution = [
+            {
+                "action": action.value,
+                "count": sum(order["recommended_action"] == action.value for order in scored),
+                "percentage": sum(order["recommended_action"] == action.value for order in scored) / len(scored) if scored else 0.0,
+                "expected_net_recovery": float(sum(order["expected_net_recovery"] for order in scored if order["recommended_action"] == action.value)),
+            }
+            for action in InterventionAction
+        ]
+        return {
+            "summary": {
+                "merchant_id": self.merchant_context.merchant_id,
+                "merchant_context_source": self.merchant_context.source,
+                "total_orders": int(len(frame)),
+                "cod_orders": int(len(cod)),
+                "prepaid_orders": int(len(prepaid)),
+                "total_order_value": float(pd.to_numeric(frame["amount"]).sum()),
+                "rto_orders": int(len(rto)),
+                "rto_value": float(pd.to_numeric(rto["amount"]).sum()) if not rto.empty else 0.0,
+                "rto_rate": float(len(rto) / len(cod)) if len(cod) else 0.0,
+                "predicted_revenue_at_risk": float(sum(order["expected_revenue_at_risk"] for order in scored)),
+                "scored_cod_orders": len(scored),
+                "ranking_note": "predicted_revenue_at_risk is calculated over the recent synthetic COD evaluation window",
+            },
+            "opportunity": {
+                "merchant_id": self.merchant_context.merchant_id,
+                "orders_evaluated": len(scored),
+                "orders_with_positive_expected_recovery": len(positive),
+                "total_revenue_at_risk": float(sum(order["expected_revenue_at_risk"] for order in scored)),
+                "expected_gross_recovery": float(sum(order["expected_gross_recovery"] for order in positive)),
+                "expected_intervention_cost": float(sum(order["expected_intervention_cost"] for order in positive)),
+                "expected_net_recovery": float(sum(order["expected_net_recovery"] for order in positive)),
+                "assumption_source": "synthetic_demo_assumption",
+            },
+            "distribution": {"merchant_id": self.merchant_context.merchant_id, "orders_evaluated": len(scored), "distribution": distribution},
+            "priority": {
+                "merchant_id": self.merchant_context.merchant_id,
+                "ranking_metric": "expected_revenue_at_risk",
+                "limit": 250,
+                "minimum_rto_probability": 0.30,
+                "minimum_order_value": 0.0,
+                "orders": sorted(
+                    [order for order in scored if order["rto_probability"] >= 0.30],
+                    key=lambda order: order["expected_revenue_at_risk"],
+                    reverse=True,
+                ),
+            },
+        }

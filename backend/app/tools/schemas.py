@@ -35,6 +35,8 @@ class OrderSnapshot(BaseModel):
     product_category: str
     is_first_order: bool
     created_at: str
+    source: str = "synthetic"
+    razorpay_order_id: str | None = None
 
 
 class RiskResult(BaseModel):
@@ -72,4 +74,4 @@ class ExecutionResult(BaseModel):
     order_id: str
     timestamp: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
     reason: str
-
+    razorpay: dict[str, Any] | None = None
