@@ -1,5 +1,5 @@
 const env = import.meta.env as Record<string, string | undefined>;
-const API_BASE = env.VITE_API_URL ?? env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_BASE = env.VITE_API_URL ?? env.NEXT_PUBLIC_API_URL ?? "";
 
 export class ApiError extends Error {
   constructor(
