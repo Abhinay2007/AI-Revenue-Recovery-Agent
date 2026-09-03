@@ -146,6 +146,8 @@ export interface PriorityOrder {
   expected_gross_recovery: number;
   expected_intervention_cost: number;
   expected_net_recovery: number;
+  source?: "synthetic" | "razorpay_test" | string;
+  razorpay_order_id?: string | null;
 }
 
 export interface PriorityOrdersResult {
@@ -235,6 +237,12 @@ export interface AgentResponse {
   execution_status?: ExecutionResult | undefined;
   audit_id?: string | undefined;
   tool_calls: Array<ToolCallRecord | Record<string, unknown>>;
+}
+
+export interface RecoveryRequest {
+  order_id: string;
+  action: string;
+  session_id?: string | undefined;
 }
 
 // ─── Recovery decision API ───────────────────────────────────────────────────

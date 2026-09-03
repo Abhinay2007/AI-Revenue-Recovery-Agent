@@ -1,8 +1,14 @@
+from uuid import uuid4
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
+from app.agent.agent import agent_singleton
+from app.db.session import SessionLocal
 from app.integrations.razorpay import RazorpayAPIError, RazorpayConfigurationError, RazorpayMappingError, RazorpayTestModeAdapter
+from app.services.order_ingestion import persist_razorpay_order
 
 router = APIRouter(prefix="/api/v1/razorpay", tags=["razorpay"])
 
@@ -58,29 +64,63 @@ def create_razorpay_test_order(request: RazorpayTestOrderRequest) -> dict:
     settings = get_settings()
     try:
         adapter = RazorpayTestModeAdapter.from_settings(settings)
-        order = adapter.create_test_order_from_paise(
-            amount_paise=request.amount,
-            currency=request.currency,
-            receipt=request.receipt,
-            internal_order_id=request.internal_order_id,
-            notes=request.notes,
-        )
+        internal_order_id = request.internal_order_id or f"RZP-TEST-{uuid4().hex[:16].upper()}"
+        if hasattr(adapter, "get_mapping"):
+            try:
+                existing_mapping = adapter.get_mapping(internal_order_id)
+            except RazorpayMappingError as exc:
+                if "mapping_not_found" not in str(exc):
+                    raise
+                existing_mapping = None
+        else:
+            existing_mapping = None
+        if existing_mapping is not None:
+            existing = adapter.fetch_order_for_internal_order(internal_order_id)
+            order = existing["razorpay_order"]
+            order = {
+                "internal_order_id": internal_order_id,
+                "razorpay_order_id": order.get("id"),
+                "receipt": order.get("receipt") or existing_mapping.get("receipt"),
+                "amount": order.get("amount"),
+                "currency": order.get("currency"),
+                "status": order.get("status"),
+            }
+            reused = True
+        else:
+            order = adapter.create_test_order_from_paise(
+                amount_paise=request.amount,
+                currency=request.currency,
+                receipt=request.receipt,
+                internal_order_id=internal_order_id,
+                notes=request.notes,
+            )
+            reused = False
     except RazorpayConfigurationError as exc:
         return _safe_test_order_error("configuration", str(exc))
     except TimeoutError as exc:
         return _safe_test_order_error("timeout", str(exc))
     except RazorpayAPIError as exc:
         return _safe_test_order_error("api", str(exc))
+    internal_created = False
+    if hasattr(adapter, "get_mapping"):
+        try:
+            with SessionLocal() as session:
+                _, internal_created = persist_razorpay_order(session, internal_order_id, order)
+            agent_singleton.tools.order_tool.refresh()
+        except SQLAlchemyError:
+            return _safe_test_order_error("database", "Razorpay order was created but could not be ingested into the recovery database")
     return {
         "mode": "test",
         "created": True,
-        "internal_order_id": order.get("internal_order_id"),
+        "internal_order_id": internal_order_id,
         "razorpay_order_id": order.get("razorpay_order_id"),
         "receipt": order.get("receipt"),
         "amount": order.get("amount"),
         "currency": order.get("currency"),
         "status": order.get("status"),
-        "mapping_created": bool(order.get("internal_order_id") and order.get("razorpay_order_id")),
+        "mapping_created": bool(internal_order_id and order.get("razorpay_order_id")),
+        "internal_order_created": internal_created,
+        "reused_existing_mapping": reused,
     }
 
 

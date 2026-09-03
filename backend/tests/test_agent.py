@@ -60,6 +60,52 @@ def test_agent_recover_requires_approval_and_does_not_execute():
     assert "Approval required" in response.natural_language_response
 
 
+def test_deterministic_recovery_request_creates_pending_without_calling_provider():
+    class ProviderMustNotBeCalled(LocalRuleBasedProvider):
+        def plan(self, message):
+            raise AssertionError("provider must not be called")
+
+    agent = RevenueRecoveryAgent(provider=ProviderMustNotBeCalled(), tools=AgentToolset())
+    decision = agent.tools.recovery_tool.evaluate_recovery(ACTIONABLE_ORDER_ID)
+
+    response = agent.request_recovery(
+        ACTIONABLE_ORDER_ID,
+        decision["recommended_action"],
+        session_id="deterministic-request",
+    )
+
+    assert response.approval_required is True
+    assert response.pending_action_id is not None
+    assert response.execution_status is None
+
+
+def test_deterministic_recovery_request_rejects_stale_action_without_pending_action():
+    agent = make_agent()
+    decision = agent.tools.recovery_tool.evaluate_recovery(ACTIONABLE_ORDER_ID)
+    stale_action = next(
+        candidate["action"]
+        for candidate in decision["candidate_actions"]
+        if candidate["action"] != decision["recommended_action"]
+    )
+    response = agent.request_recovery(ACTIONABLE_ORDER_ID, stale_action)
+
+    assert response.status == "FAILED"
+    assert response.pending_action_id is None
+    assert pending_approval_store.get(response.pending_action_id or "missing") is None
+
+
+def test_policy_blocked_recovery_request_does_not_create_pending_action():
+    agent = make_agent()
+    agent.tools.recovery_tool.policy = MerchantPolicy(minimum_rto_probability_for_intervention=Decimal("1"))
+
+    response = agent.request_recovery(ACTIONABLE_ORDER_ID, "PARTIAL_PREPAY")
+
+    assert response.status == "FAILED"
+    assert response.approval_required is False
+    assert response.pending_action_id is None
+    assert pending_approval_store.get(response.pending_action_id or "missing") is None
+
+
 def test_recommendation_question_does_not_create_pending_action():
     agent = make_agent()
     response = agent.chat(AgentChatRequest(message=f"Should I recover {ACTIONABLE_ORDER_ID}?", session_id="s-recommend"))

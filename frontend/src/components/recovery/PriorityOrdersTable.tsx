@@ -164,6 +164,9 @@ export function PriorityOrdersTable({
                       <p className="text-[11px] text-subtle-foreground">
                         {order.payment_method?.toUpperCase() ?? "COD"}
                       </p>
+                      <p className="text-[10px] text-primary">
+                        {order.source === "razorpay_test" ? "Razorpay Test Mode" : "Synthetic"}
+                      </p>
                     </td>
                     <td className="num px-4 py-3 text-right text-[13px] font-medium">
                       {formatINR(order.amount)}

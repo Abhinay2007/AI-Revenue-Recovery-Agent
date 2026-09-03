@@ -348,7 +348,7 @@ function Landing() {
 
           {/* Live figures — only real backend values */}
           <Reveal delay={220} className="mt-16">
-            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-1">
               {/* <LiveStat
                 label="Predicted revenue at risk"
                 value={s ? formatINR(s.predicted_revenue_at_risk) : null}

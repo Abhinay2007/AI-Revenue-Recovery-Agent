@@ -13,6 +13,12 @@ class RecoveryDecisionRequest(BaseModel):
     attempt_count: int = Field(default=0, ge=0)
 
 
+class RecoveryRequest(BaseModel):
+    order_id: str = Field(min_length=1)
+    action: str = Field(min_length=1)
+    session_id: str | None = None
+
+
 class RecoveryDecisionResponse(BaseModel):
     order_id: str
     recommended_action: str
@@ -28,4 +34,3 @@ class RecoveryDecisionResponse(BaseModel):
     policy_checks: dict[str, list[dict[str, Any]]]
     assumption_source: str
     audit_event: dict[str, Any]
-

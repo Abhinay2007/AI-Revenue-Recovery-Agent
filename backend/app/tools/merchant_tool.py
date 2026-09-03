@@ -65,6 +65,8 @@ class MerchantTool:
                     "expected_gross_recovery": decision["expected_recovered_revenue"],
                     "expected_intervention_cost": decision["expected_intervention_cost"],
                     "expected_net_recovery": decision["expected_net_recovery"],
+                    "source": str(record.get("source") or "synthetic"),
+                    "razorpay_order_id": record.get("razorpay_order_id"),
                 }
             )
         return rows

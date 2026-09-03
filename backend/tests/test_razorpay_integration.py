@@ -371,6 +371,105 @@ def test_create_test_order_endpoint_returns_safe_response(monkeypatch):
     assert "secret" not in str(result).lower()
 
 
+def test_create_test_order_endpoint_treats_missing_mapping_as_new_order(monkeypatch):
+    from app.api.routes import razorpay as razorpay_route
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    class FakeAdapter:
+        @classmethod
+        def from_settings(cls, settings):
+            return cls()
+
+        def get_mapping(self, internal_order_id):
+            raise RazorpayMappingError(f"mapping_not_found: {internal_order_id}")
+
+        def create_test_order_from_paise(self, **kwargs):
+            return {
+                "internal_order_id": kwargs["internal_order_id"],
+                "razorpay_order_id": "order_test_new",
+                "receipt": kwargs["receipt"],
+                "amount": kwargs["amount_paise"],
+                "currency": kwargs["currency"],
+                "status": "created",
+            }
+
+    monkeypatch.setattr(razorpay_route, "RazorpayTestModeAdapter", FakeAdapter)
+    monkeypatch.setattr(razorpay_route, "SessionLocal", lambda: FakeSession())
+    monkeypatch.setattr(razorpay_route, "persist_razorpay_order", lambda *args: (None, True))
+    monkeypatch.setattr(razorpay_route.agent_singleton.tools.order_tool, "refresh", lambda: None)
+
+    result = razorpay_route.create_razorpay_test_order(
+        razorpay_route.RazorpayTestOrderRequest(
+            amount=10000,
+            currency="INR",
+            internal_order_id="RZP-TEST-NEW",
+        )
+    )
+
+    assert result["created"] is True
+    assert result["razorpay_order_id"] == "order_test_new"
+    assert result["reused_existing_mapping"] is False
+
+
+def test_create_test_order_endpoint_reuses_existing_mapping_without_creating(monkeypatch):
+    from app.api.routes import razorpay as razorpay_route
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+    class FakeAdapter:
+        created = False
+
+        @classmethod
+        def from_settings(cls, settings):
+            return cls()
+
+        def get_mapping(self, internal_order_id):
+            return {"internal_order_id": internal_order_id, "razorpay_order_id": "order_existing", "receipt": "rr_existing"}
+
+        def fetch_order_for_internal_order(self, internal_order_id):
+            return {
+                "razorpay_order": {
+                    "id": "order_existing",
+                    "amount": 100,
+                    "currency": "INR",
+                    "receipt": "rr_existing",
+                    "status": "created",
+                }
+            }
+
+        def create_test_order_from_paise(self, **kwargs):
+            self.created = True
+            raise AssertionError("duplicate Razorpay order creation")
+
+    monkeypatch.setattr(razorpay_route, "RazorpayTestModeAdapter", FakeAdapter)
+    monkeypatch.setattr(razorpay_route, "SessionLocal", lambda: FakeSession())
+    monkeypatch.setattr(razorpay_route, "persist_razorpay_order", lambda *args: (None, False))
+    monkeypatch.setattr(razorpay_route.agent_singleton.tools.order_tool, "refresh", lambda: None)
+
+    result = razorpay_route.create_razorpay_test_order(
+        razorpay_route.RazorpayTestOrderRequest(
+            amount=99999,
+            currency="INR",
+            internal_order_id="RZP-TEST-EXISTING",
+        )
+    )
+
+    assert result["created"] is True
+    assert result["razorpay_order_id"] == "order_existing"
+    assert result["reused_existing_mapping"] is True
+
+
 def test_create_test_order_endpoint_handles_configuration_error(monkeypatch):
     from app.api.routes import razorpay as razorpay_route
 

@@ -1,7 +1,12 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ClipboardCheck, Loader2, Search, ShoppingBag } from "lucide-react";
 import { createRazorpayTestOrder, getRazorpayMapping } from "@/lib/api/razorpay";
-import type { RazorpayMappingResponse, RazorpayTestOrderResponse } from "@/lib/types";
+import type {
+  RazorpayMappingResponse,
+  RazorpayTestOrderRequest,
+  RazorpayTestOrderResponse,
+} from "@/lib/types";
 import { formatINR } from "@/lib/format";
 
 function safeError() {
@@ -16,25 +21,33 @@ export function RazorpayTestOrderPanel() {
   const [mapping, setMapping] = useState<RazorpayMappingResponse | null>(null);
   const [loading, setLoading] = useState<"create" | "mapping" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const createOrder = async () => {
     const paise = Number(amount);
-    if (!internalOrderId.trim() || !Number.isInteger(paise) || paise <= 0) {
-      setError("Enter an internal order ID and a positive amount in paise.");
+    if (!Number.isInteger(paise) || paise <= 0) {
+      setError("Enter a positive amount in paise.");
       return;
     }
     setLoading("create");
     setError(null);
     setMapping(null);
     try {
-      const response = await createRazorpayTestOrder({
+      const request: RazorpayTestOrderRequest = {
         amount: paise,
         currency: "INR",
-        receipt: receipt.trim() || undefined,
-        internal_order_id: internalOrderId.trim(),
-      });
+        ...(receipt.trim() ? { receipt: receipt.trim() } : {}),
+        ...(internalOrderId.trim() ? { internal_order_id: internalOrderId.trim() } : {}),
+      };
+      const response = await createRazorpayTestOrder(request);
       if (!response.created) throw new Error("not-created");
       setCreated(response);
+      const resolvedInternalOrderId = response.internal_order_id ?? "";
+      setInternalOrderId(resolvedInternalOrderId);
+      if (resolvedInternalOrderId) {
+        setMapping(await getRazorpayMapping(resolvedInternalOrderId));
+      }
+      await queryClient.invalidateQueries({ queryKey: ["merchant-analytics"] });
     } catch {
       setError(safeError());
     } finally {
@@ -76,7 +89,7 @@ export function RazorpayTestOrderPanel() {
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         <label className="text-xs text-muted-foreground sm:col-span-2">
-          Internal order ID
+          Internal order ID (optional)
           <input
             value={internalOrderId}
             onChange={(e) => setInternalOrderId(e.target.value)}

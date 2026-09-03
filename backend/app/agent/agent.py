@@ -390,6 +390,23 @@ class RevenueRecoveryAgent:
         self._log_result(response)
         return response
 
+    def request_recovery(self, order_id: str, action: str, session_id: str | None = None) -> AgentResponse:
+        """Create a pending action using deterministic analysis, without invoking the provider."""
+        state = AgentState(
+            session_id=session_id or f"session_{uuid4().hex}",
+            user_request=f"Request recovery for {order_id}",
+            intent=AgentIntent.REQUEST_EXECUTION.value,
+            order_id=order_id,
+        )
+        response = self._analyze_order(
+            state,
+            require_approval=True,
+            requested_action=action,
+            audit_tool_name="recovery.request",
+        )
+        self._log_result(response)
+        return response
+
     def _chat_with_tool_loop(self, state: AgentState) -> AgentResponse:
         self.provider.reset()
         # A recommendation from tool output must not open the approval gate.
@@ -572,7 +589,13 @@ class RevenueRecoveryAgent:
 
         return json.dumps(value, default=str)
 
-    def _analyze_order(self, state: AgentState, require_approval: bool) -> AgentResponse:
+    def _analyze_order(
+        self,
+        state: AgentState,
+        require_approval: bool,
+        requested_action: str | None = None,
+        audit_tool_name: str = "agent.chat",
+    ) -> AgentResponse:
         try:
             order = self._record_tool(state, "order_tool.get_order", {"order_id": state.order_id}, lambda: self.tools.order_tool.get_order(state.order_id or "").model_dump())
             risk = self._record_tool(state, "risk_tool.get_rto_risk", {"order_id": state.order_id}, lambda: self.tools.risk_tool.get_rto_risk(state.order_id or "").model_dump())
@@ -594,6 +617,13 @@ class RevenueRecoveryAgent:
         pending_action_id = None
         approval_required = False
 
+        if requested_action is not None and requested_action != recovery["recommended_action"]:
+            response = self._failure(
+                state,
+                "Requested action does not match the current deterministic recovery recommendation. No action was created.",
+            )
+            return response
+
         if require_approval and recovery["recommended_action"] != "NO_ACTION" and policy["allowed"]:
             pending = pending_approval_store.create(
                 PendingAction(
@@ -612,7 +642,7 @@ class RevenueRecoveryAgent:
         audit = self.tools.audit_tool.create_audit_event(
             session_id=state.session_id,
             order_id=state.order_id,
-            tool="agent.chat",
+            tool=audit_tool_name,
             inputs_summary={"intent": "REQUEST_EXECUTION" if require_approval else "ANALYZE"},
             outputs_summary={"recommended_action": recovery["recommended_action"]},
             decision=recovery,

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { CheckCircle2, Loader2, MessageSquare, ShieldCheck, X, XCircle } from "lucide-react";
 import type { AgentResponse, PriorityOrder } from "@/lib/types";
 import { agentChat } from "@/lib/api/agent";
+import { requestRecovery } from "@/lib/api/recovery";
 import { formatAction, formatINR, formatPercent } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
 import { ActionTag, RiskBadge } from "@/components/shared/Badges";
@@ -15,6 +16,7 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
   const { addPendingApproval, addAuditEntry, sessionId } = useAppStore();
 
@@ -30,6 +32,7 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
     setError(null);
     setAnalysis(null);
     setRequested(false);
+    setPendingActionId(null);
 
     agentChat({ message: `Analyze ${order.order_id}`, session_id: sessionId })
       .then((res) => {
@@ -68,11 +71,13 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
     setRequesting(true);
     setError(null);
     try {
-      const res = await agentChat({
-        message: `Recover ${order.order_id}`,
+      const res = await requestRecovery({
+        order_id: order.order_id,
+        action: analysis.recommendation.recommended_action,
         session_id: sessionId,
       });
       if (res.approval_required && res.pending_action_id) {
+        setPendingActionId(res.pending_action_id);
         addPendingApproval({
           pending_action_id: res.pending_action_id,
           order_id: order.order_id,
@@ -112,6 +117,7 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
   const rec = analysis?.recommendation;
   const risk = analysis?.risk;
   const rtoProbability = risk?.rto_probability ?? order.rto_probability;
+  const isRazorpayTestOrder = order.source === "razorpay_test";
 
   return (
     <>
@@ -128,7 +134,9 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
       >
         <header className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
           <div>
-            <p className="label-xs">Internal synthetic order</p>
+            <p className="label-xs">
+              {isRazorpayTestOrder ? "Razorpay Test Mode order" : "Internal synthetic order"}
+            </p>
             <p className="num mt-1 text-[13px] font-semibold">{order.order_id}</p>
             <div className="mt-2 flex items-center gap-2">
               <span className="num text-xl font-semibold">{formatINR(order.amount)}</span>
@@ -147,6 +155,10 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
         <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
           <section>
             <p className="label-xs mb-2">Risk</p>
+            <p className="mb-3 text-[11px] text-subtle-foreground">
+              Source: {isRazorpayTestOrder ? "Razorpay Test Mode" : "synthetic dataset"}. AI/RTO
+              analysis is calculated by the Revenue Recovery Agent.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               <Stat label="RTO probability" value={formatPercent(rtoProbability, 2)} tone="risk" />
               <Stat
@@ -291,7 +303,8 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
             <div className="flex items-center gap-2 rounded-lg border border-positive/25 bg-positive-soft px-3 py-2.5">
               <CheckCircle2 size={14} className="text-positive" />
               <p className="text-xs text-positive">
-                Recovery requested —{" "}
+                Recovery pending approval
+                {pendingActionId ? ` (${pendingActionId})` : ""} —{" "}
                 <Link to="/approvals" className="font-semibold underline">
                   review in Approval Center
                 </Link>

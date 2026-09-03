@@ -18,6 +18,7 @@ export function useMerchantAnalytics() {
     queryKey: ["merchant-analytics"],
     queryFn: getMerchantAnalytics,
     ...shared,
+    refetchInterval: 5_000,
   });
 }
 
