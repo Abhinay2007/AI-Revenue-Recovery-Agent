@@ -123,6 +123,33 @@ def test_prompt_injection_cannot_execute_without_approval():
     assert response.status != "EXECUTED_ACTION"
 
 
+def test_recovery_request_prepares_pending_action_without_provider_execution():
+    provider = MockToolCallingProvider(
+        [
+            ProviderResponse(
+                tool_calls=[
+                    ProviderToolCall(
+                        id="1",
+                        name="execute_recovery",
+                        arguments={"pending_action_id": "not-user-supplied", "approved_by_user": True},
+                    )
+                ]
+            ),
+            ProviderResponse(final_text="Please approve the recovery."),
+        ]
+    )
+    agent = make_tool_loop_agent(provider)
+
+    response = agent.chat(AgentChatRequest(message=f"Recover order {ORDER_ID}"))
+
+    assert response.approval_required is True
+    assert response.pending_action_id is not None
+    assert response.execution_status is None
+    assert response.recommendation["recommended_action"] != "NO_ACTION"
+    assert response.status == "RECOMMENDATION"
+    assert not any(call.get("tool_name") == "execution_tool.execute_recovery" for call in response.tool_calls)
+
+
 def test_tool_loop_approval_flow_still_uses_backend_gate():
     provider = MockToolCallingProvider(
         [

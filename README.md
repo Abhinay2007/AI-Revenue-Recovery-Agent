@@ -28,7 +28,7 @@ Implemented now:
 - Prediction service with risk levels and model-derived explanation metadata
 - Deterministic recovery decision engine with policy guardrails and audit event output
 - Synthetic recovery simulator foundation
-- AI revenue recovery agent with local, mock, OpenAI Responses API, and Groq providers
+- AI revenue recovery agent with Ollama, rule-based, mock, OpenAI Responses API, and Groq providers
 - Typed tools for order analysis, risk, revenue-at-risk, recovery recommendations, policy checks, simulated execution, audit, and merchant-level summaries
 - Explicit approval API before simulated recovery execution
 - pytest coverage for the foundation
@@ -191,6 +191,23 @@ Razorpay is disabled by default and accepts only test-mode keys. See `docs/razor
 
 Real LLM smoke test:
 
+The default development provider is Ollama, running on the host:
+
+```bash
+LLM_PROVIDER=ollama \
+LLM_MODEL=llama3.2:latest \
+OLLAMA_BASE_URL=http://localhost:11434 \
+LLM_REQUEST_TIMEOUT_SECONDS=120 \
+.venv/bin/python scripts/ollama_smoke_test.py
+```
+
+When the backend runs in Docker Compose, use
+`OLLAMA_BASE_URL=http://host.docker.internal:11434`. Ollama owns the model
+download and inference; the backend does not download LLM weights. Typed tools
+and deterministic backend services remain authoritative for financial values.
+
+Groq remains available as an alternative:
+
 ```bash
 LLM_PROVIDER=groq \
 LLM_MODEL=<configured-model> \
@@ -230,6 +247,7 @@ LLM_MODEL
 LLM_API_KEY
 MAX_AGENT_STEPS
 LLM_REQUEST_TIMEOUT_SECONDS
+OLLAMA_BASE_URL
 RAZORPAY_ENABLED
 RAZORPAY_KEY_ID
 RAZORPAY_KEY_SECRET

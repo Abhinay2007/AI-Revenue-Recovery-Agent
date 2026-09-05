@@ -2,8 +2,17 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+
+
+def normalize_database_url(value: str) -> str:
+    """Use the installed psycopg v3 driver for unqualified PostgreSQL URLs."""
+    parsed = make_url(value)
+    if parsed.drivername in {"postgres", "postgresql", "postgresql+psycopg2"}:
+        return str(parsed.set(drivername="postgresql+psycopg"))
+    return value
 
 
 def _resolve_default_path(env_var: str, relative_parts: list[str]) -> Path:
@@ -39,11 +48,12 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
-    llm_provider: str = Field(default="local", alias="LLM_PROVIDER")
-    llm_model: str = Field(default="rule-based-recovery-agent", alias="LLM_MODEL")
+    llm_provider: str = Field(default="ollama", alias="LLM_PROVIDER")
+    llm_model: str = Field(default="llama3.2:latest", alias="LLM_MODEL")
     llm_api_key: str | None = Field(default=None, alias="LLM_API_KEY")
     max_agent_steps: int = Field(default=8, alias="MAX_AGENT_STEPS")
-    llm_request_timeout_seconds: float = Field(default=20.0, alias="LLM_REQUEST_TIMEOUT_SECONDS")
+    llm_request_timeout_seconds: float = Field(default=120.0, alias="LLM_REQUEST_TIMEOUT_SECONDS")
+    ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
     dataset_path: Path = Field(default_factory=get_default_dataset_path, alias="DATASET_PATH")
     artifact_path: Path = Field(default_factory=get_default_artifact_path, alias="ARTIFACT_PATH")
     razorpay_key_id: str | None = Field(default=None, alias="RAZORPAY_KEY_ID")
@@ -51,6 +61,11 @@ class Settings(BaseSettings):
     razorpay_enabled: bool = Field(default=False, alias="RAZORPAY_ENABLED")
     razorpay_request_timeout_seconds: float = Field(default=10.0, alias="RAZORPAY_REQUEST_TIMEOUT_SECONDS")
     razorpay_test_order_id: str | None = Field(default=None, alias="RAZORPAY_TEST_ORDER_ID")
+
+    @field_validator("database_url")
+    @classmethod
+    def use_psycopg_v3(cls, value: str) -> str:
+        return normalize_database_url(value)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

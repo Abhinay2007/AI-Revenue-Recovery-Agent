@@ -1,5 +1,8 @@
+import pytest
+
 from app.agent.agent import AgentToolset
 from app.decision.interventions import InterventionAction
+from app.tools.schemas import OrderQueryInput
 
 
 def test_revenue_summary_matches_order_population():
@@ -50,6 +53,30 @@ def test_default_priority_orders_include_all_eligible_orders():
 
     assert result["limit"] == 250
     assert len(result["orders"]) == len(eligible)
+
+
+def test_priority_orders_default_threshold_is_030():
+    tools = AgentToolset()
+
+    result = tools.merchant_tool.get_priority_recovery_orders()
+
+    assert result["minimum_rto_probability"] == 0.30
+
+
+def test_priority_orders_accept_explicit_threshold():
+    tools = AgentToolset()
+
+    result = tools.merchant_tool.get_priority_recovery_orders(minimum_rto_probability=0.50)
+
+    assert result["minimum_rto_probability"] == 0.50
+    assert all(order["rto_probability"] >= 0.50 for order in result["orders"])
+
+
+def test_priority_order_threshold_validation_remains_strict():
+    with pytest.raises(ValueError):
+        OrderQueryInput(minimum_rto_probability=1.01)
+    with pytest.raises(ValueError):
+        OrderQueryInput(minimum_rto_probability=-0.01)
 
 
 def test_recovery_opportunity_summary_matches_underlying_scored_orders():

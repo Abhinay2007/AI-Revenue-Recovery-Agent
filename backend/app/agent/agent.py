@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -55,8 +56,8 @@ class AgentToolset:
         else:
             self.execution_tool = SimulatedRecoveryExecutor(self.order_tool, self.policy_tool)
 
-    def tool_definitions(self) -> list[dict[str, Any]]:
-        return [
+    def tool_definitions(self, *, include_execution: bool = True) -> list[dict[str, Any]]:
+        definitions = [
             {
                 "type": "function",
                 "name": "get_order",
@@ -143,16 +144,16 @@ class AgentToolset:
             {
                 "type": "function",
                 "name": "get_priority_recovery_orders",
-                "description": "Use for prioritization questions. Returns orders ranked by expected revenue at risk, not raw probability alone.",
+                "description": "Use for prioritization questions. Returns orders ranked by expected revenue at risk, not raw probability alone. minimum_rto_probability is 0.30 when the merchant does not specify a threshold. Use 0.0 ONLY when the merchant explicitly requests all orders regardless of RTO probability; otherwise preserve the merchant's stated threshold.",
                 "strict": True,
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "limit": {"type": "integer", "minimum": 1, "maximum": 250},
-                        "minimum_rto_probability": {"type": "number", "minimum": 0, "maximum": 1},
-                        "minimum_order_value": {"type": "number", "minimum": 0},
+                        "limit": {"type": ["integer", "null"], "minimum": 1, "maximum": 50, "default": 50},
+                        "minimum_rto_probability": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "default": 0.30},
+                        "minimum_order_value": {"type": ["number", "null"], "minimum": 0, "default": 0.0},
                     },
-                    "required": ["limit", "minimum_rto_probability", "minimum_order_value"],
+                    "required": [],
                     "additionalProperties": False,
                 },
             },
@@ -202,6 +203,9 @@ class AgentToolset:
                 },
             },
         ]
+        if not include_execution:
+            definitions = [definition for definition in definitions if definition["name"] != "execute_recovery"]
+        return definitions
 
     def call_tool(self, name: str, arguments: dict[str, Any], session_id: str) -> Any:
         if name == "get_order":
@@ -231,11 +235,12 @@ class AgentToolset:
                         "expected_revenue_at_risk": revenue.expected_revenue_at_risk,
                     }
                 )
-            return self.order_tool.find_cod_orders(OrderQueryInput(**arguments), scored)
+            return self.order_tool.find_cod_orders(self._normalized_order_query(arguments), scored)
         if name == "get_revenue_summary":
             return self.merchant_tool.get_revenue_summary()
         if name == "get_priority_recovery_orders":
-            return self.merchant_tool.get_priority_recovery_orders(**arguments)
+            query = self._normalized_order_query(arguments)
+            return self.merchant_tool.get_priority_recovery_orders(**query.model_dump())
         if name == "get_recovery_opportunity_summary":
             return self.merchant_tool.get_recovery_opportunity_summary()
         if name == "get_recovery_action_distribution":
@@ -254,6 +259,19 @@ class AgentToolset:
             )
         raise ValueError(f"unknown tool requested: {name}")
 
+    @staticmethod
+    def _normalized_order_query(arguments: dict[str, Any]) -> OrderQueryInput:
+        query = OrderQueryInput.model_validate(arguments)
+        return query.model_copy(
+            update={
+                "limit": 50 if query.limit is None else query.limit,
+                "minimum_rto_probability": (
+                    0.30 if query.minimum_rto_probability is None else query.minimum_rto_probability
+                ),
+                "minimum_order_value": 0.0 if query.minimum_order_value is None else query.minimum_order_value,
+            }
+        )
+
 
 def default_toolset() -> AgentToolset:
     return AgentToolset()
@@ -267,6 +285,7 @@ class RevenueRecoveryAgent:
             settings.llm_model,
             settings.llm_api_key,
             settings.llm_request_timeout_seconds,
+            settings.ollama_base_url,
         )
         self.tools = tools or default_toolset()
         self.max_steps = settings.max_agent_steps
@@ -421,11 +440,14 @@ class RevenueRecoveryAgent:
         final_text: str | None = None
         try:
             for step in range(self.max_steps):
-                provider_response = self.provider.complete(messages, self.tools.tool_definitions())
+                provider_response = self.provider.complete(
+                    messages,
+                    self.tools.tool_definitions(include_execution=False if request_intent.intent == AgentIntent.REQUEST_EXECUTION else True),
+                )
                 if provider_response.tool_calls:
                     tool_outputs: list[dict[str, Any]] = []
                     for tool_call in provider_response.tool_calls:
-                        result = self._execute_provider_tool_call(state, tool_call)
+                        result = self._execute_provider_tool_call(state, self._normalize_priority_tool_call(state, tool_call))
                         tool_outputs.append(
                             {
                                 "type": "function_call_output",
@@ -442,12 +464,20 @@ class RevenueRecoveryAgent:
         except Exception as exc:
             return self._failure(state, f"Agent provider or tool loop failed. No financial recovery action will be executed. Error: {exc}")
 
+        if request_intent.intent == AgentIntent.REQUEST_EXECUTION and state.recovery_result is None:
+            # A model may emit an execution-shaped response before it has gathered
+            # the deterministic decision. Complete preparation server-side so the
+            # user receives an approval request, never an execution attempt.
+            return self._analyze_order(state, require_approval=True, audit_tool_name="agent.recovery_prepare")
+
         response = self._response_from_state(state, final_text or "Completed.")
         response.tool_calls.extend([{"steps": len(state.tool_calls), "provider": self.provider.name, "model": self.provider.model}])
         return response
 
     def _execute_provider_tool_call(self, state: AgentState, tool_call: ProviderToolCall) -> str:
         try:
+            if state.intent == AgentIntent.REQUEST_EXECUTION.value and state.order_id and tool_call.name == "execute_recovery":
+                raise ValueError("Execution is unavailable until the explicit approval endpoint is used.")
             output = self.tools.call_tool(tool_call.name, tool_call.arguments, state.session_id)
             self._capture_tool_output(state, tool_call.name, output)
             state.tool_calls.append(
@@ -461,6 +491,27 @@ class RevenueRecoveryAgent:
         except Exception as exc:
             state.tool_calls.append(ToolCallRecord(tool_name=tool_call.name, inputs_summary=tool_call.arguments, error=str(exc)))
             return self._safe_json({"error": str(exc), "tool": tool_call.name})
+
+    @staticmethod
+    def _normalize_priority_tool_call(state: AgentState, tool_call: ProviderToolCall) -> ProviderToolCall:
+        if tool_call.name != "get_priority_recovery_orders":
+            return tool_call
+
+        request = state.user_request.lower()
+        arguments = dict(tool_call.arguments)
+        explicit_all = (
+            "all orders" in request
+            and ("regardless" in request or "irrespective" in request or "without" in request)
+        )
+        percent_match = re.search(r"(?:at least|above|over|minimum of)\s+(\d+(?:\.\d+)?)\s*%", request)
+        if explicit_all:
+            threshold = 0.0
+        elif percent_match:
+            threshold = float(percent_match.group(1)) / 100.0
+        else:
+            threshold = 0.30
+        arguments["minimum_rto_probability"] = threshold
+        return ProviderToolCall(id=tool_call.id, name=tool_call.name, arguments=arguments)
 
     def _capture_tool_output(self, state: AgentState, name: str, output: Any) -> None:
         if not isinstance(output, dict):

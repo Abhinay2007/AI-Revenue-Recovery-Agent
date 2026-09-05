@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, Loader2, MessageSquare, ShieldCheck, X, XCircle } from "lucide-react";
-import type { AgentResponse, PriorityOrder } from "@/lib/types";
+import type { AgentResponse, PriorityOrder, RecoveryDecisionResponse } from "@/lib/types";
 import { agentChat } from "@/lib/api/agent";
-import { requestRecovery } from "@/lib/api/recovery";
+import { getRecoveryDecision, requestRecovery } from "@/lib/api/recovery";
 import { formatAction, formatINR, formatPercent } from "@/lib/format";
 import { useAppStore } from "@/lib/store";
 import { ActionTag, RiskBadge } from "@/components/shared/Badges";
@@ -12,7 +12,9 @@ import { ToolTrace } from "@/components/agent/ToolTrace";
 
 export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose: () => void }) {
   const [analysis, setAnalysis] = useState<AgentResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [decision, setDecision] = useState<RecoveryDecisionResponse | null>(null);
+  const [decisionLoading, setDecisionLoading] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [requested, setRequested] = useState(false);
@@ -28,9 +30,11 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
     setError(null);
     setAnalysis(null);
+    setDecision(null);
+    setDecisionLoading(true);
+    setDecisionError(null);
     setRequested(false);
     setPendingActionId(null);
 
@@ -45,7 +49,7 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
             session_id: res.session_id,
             order_id: res.order_id,
             tool: "agent.chat",
-            summary: `Order ${order.order_id} analyzed — ${res.recommendation?.recommended_action ?? "N/A"}`,
+            summary: `Order ${order.order_id} analyzed — ${order.recommended_action}`,
             tool_calls: res.tool_calls,
           });
         }
@@ -55,9 +59,21 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
           setError(
             "Unable to investigate this order. Please check that the backend is running and try again.",
           );
+      });
+    getRecoveryDecision({
+      order_id: order.order_id,
+      amount: order.amount,
+      rto_probability: order.rto_probability,
+    })
+      .then((res) => {
+        if (!cancelled) setDecision(res);
+      })
+      .catch(() => {
+        if (!cancelled)
+          setDecisionError("Unable to load the deterministic recovery recommendation.");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setDecisionLoading(false);
       });
 
     return () => {
@@ -66,14 +82,16 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.order_id]);
 
+  const rec = decision;
+
   const handleRequestRecovery = async () => {
-    if (!analysis?.recommendation) return;
+    if (!rec) return;
     setRequesting(true);
     setError(null);
     try {
       const res = await requestRecovery({
         order_id: order.order_id,
-        action: analysis.recommendation.recommended_action,
+        action: rec.recommended_action,
         session_id: sessionId,
       });
       if (res.approval_required && res.pending_action_id) {
@@ -114,7 +132,6 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
     }
   };
 
-  const rec = analysis?.recommendation;
   const risk = analysis?.risk;
   const rtoProbability = risk?.rto_probability ?? order.rto_probability;
   const isRazorpayTestOrder = order.source === "razorpay_test";
@@ -184,19 +201,15 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
 
           <section>
             <p className="label-xs mb-2">Recommendation</p>
-            {loading ? (
+            {decisionLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-6 w-40" />
                 <Skeleton className="h-4" />
                 <Skeleton className="h-4 w-2/3" />
               </div>
-            ) : // ) : error && !rec ? (
-            //   <ErrorState
-            //     title="Analysis unavailable"
-            //     message={error}
-            //     onRetry={() => setAnalysis(null)}
-            //   />
-            rec ? (
+            ) : decisionError ? (
+              <p className="text-sm text-negative">{decisionError}</p>
+            ) : rec ? (
               <div className="space-y-3">
                 <ActionTag label={formatAction(rec.recommended_action)} />
                 <dl className="divide-y divide-border overflow-hidden rounded-lg border border-border">
@@ -288,6 +301,9 @@ export function OrderDrawer({ order, onClose }: { order: PriorityOrder; onClose:
                 )}
 
                 {analysis?.tool_calls && <ToolTrace toolCalls={analysis.tool_calls} />}
+                <p className="text-[11px] text-subtle-foreground">
+                  Requires merchant approval before execution.
+                </p>
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
