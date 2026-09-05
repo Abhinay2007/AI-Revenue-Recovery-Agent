@@ -105,10 +105,17 @@ All values come from deterministic backend services. The LLM may summarize them,
 Set:
 
 ```text
-LLM_PROVIDER=groq
-LLM_MODEL=<model-name>
-LLM_API_KEY=<secret>
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.2:latest
+OLLAMA_BASE_URL=http://localhost:11434
+LLM_REQUEST_TIMEOUT_SECONDS=120
 ```
+
+Ollama runs separately from the backend and provides native tool calling. In
+Docker Compose, use `http://host.docker.internal:11434` so the backend reaches
+the host Ollama service. The backend does not download or load model weights.
+The `local` provider remains the offline rule-based provider; Groq and OpenAI
+remain supported API providers and require `LLM_API_KEY`.
 
 The OpenAI and Groq providers are isolated in `backend/app/agent/provider.py`. Each sends the system prompt, conversation messages, and strict tool schemas to its provider API, then returns either final text or structured tool calls. Groq uses Chat Completions message continuation and preserves the assistant tool-call message before appending typed tool results.
 

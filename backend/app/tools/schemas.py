@@ -16,9 +16,9 @@ class OrderLookupInput(BaseModel):
 
 
 class OrderQueryInput(BaseModel):
-    limit: int = Field(default=5, ge=1, le=50)
-    minimum_rto_probability: float = Field(default=0.0, ge=0, le=1)
-    minimum_order_value: float = Field(default=0.0, ge=0)
+    limit: int | None = Field(default=50, ge=1, le=50)
+    minimum_rto_probability: float | None = Field(default=0.30, ge=0, le=1)
+    minimum_order_value: float | None = Field(default=0.0, ge=0)
 
 
 class OrderSnapshot(BaseModel):

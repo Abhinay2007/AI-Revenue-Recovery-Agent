@@ -24,9 +24,11 @@ services:
         DATASET_PATH: /app/data/generated/orders.csv
         ARTIFACT_PATH: /app/data/generated/models/rto_predictor.joblib
 
-        LLM_PROVIDER: ${LLM_PROVIDER}
-        LLM_MODEL: ${LLM_MODEL}
-        LLM_API_KEY: ${LLM_API_KEY}
+        LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+        LLM_MODEL: ${LLM_MODEL:-llama3.2:latest}
+        LLM_API_KEY: ${LLM_API_KEY:-}
+        LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-120}
+        OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
         RAZORPAY_ENABLED: ${RAZORPAY_ENABLED:-false}
         RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
         RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
@@ -34,6 +36,8 @@ services:
         RAZORPAY_TEST_ORDER_ID: ${RAZORPAY_TEST_ORDER_ID:-}
       ports:
         - "8000:8000"
+      extra_hosts:
+        - "host.docker.internal:host-gateway"
       depends_on:
         postgres:
           condition: service_healthy

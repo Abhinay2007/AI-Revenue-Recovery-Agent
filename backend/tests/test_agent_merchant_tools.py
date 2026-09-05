@@ -1,3 +1,5 @@
+import pytest
+
 from app.agent.agent import AgentToolset, RevenueRecoveryAgent
 from app.agent.provider import LocalRuleBasedProvider, MockToolCallingProvider, ProviderResponse, ProviderToolCall
 from app.agent.schemas import AgentChatRequest
@@ -63,6 +65,102 @@ def test_mock_llm_selects_priority_orders_tool():
     assert response.priority_orders is not None
     assert len(response.priority_orders["orders"]) <= 3
     assert response.priority_orders["orders"][0]["order_id"] in response.natural_language_response
+
+
+def test_priority_question_uses_backend_default_without_threshold():
+    provider = MockToolCallingProvider(
+        [
+            ProviderResponse(tool_calls=[ProviderToolCall(id="1", name="get_priority_recovery_orders", arguments={})]),
+            ProviderResponse(final_text="Here are the priority orders."),
+        ]
+    )
+    agent = make_agent(provider)
+
+    response = agent.chat(AgentChatRequest(message="Which orders should I prioritize for recovery?"))
+
+    assert response.priority_orders is not None
+    assert response.priority_orders["minimum_rto_probability"] == 0.30
+    assert response.tool_calls[0]["inputs_summary"]["minimum_rto_probability"] == 0.30
+
+
+@pytest.mark.parametrize(
+    ("message", "model_threshold", "expected_threshold"),
+    [
+        ("Show orders with at least 50% RTO probability", 0.0, 0.50),
+        ("Show all orders regardless of RTO probability", 0.30, 0.0),
+    ],
+)
+def test_priority_threshold_comes_from_explicit_user_request(message, model_threshold, expected_threshold):
+    provider = MockToolCallingProvider(
+        [
+            ProviderResponse(
+                tool_calls=[
+                    ProviderToolCall(
+                        id="1",
+                        name="get_priority_recovery_orders",
+                        arguments={"limit": 5, "minimum_rto_probability": model_threshold},
+                    )
+                ]
+            ),
+            ProviderResponse(final_text="Priority orders."),
+        ]
+    )
+    response = make_agent(provider).chat(AgentChatRequest(message=message))
+
+    assert response.priority_orders["minimum_rto_probability"] == expected_threshold
+    assert response.tool_calls[0]["inputs_summary"]["minimum_rto_probability"] == expected_threshold
+
+
+def test_priority_tool_coerces_numeric_string_threshold_at_tool_boundary():
+    agent = make_agent(MockToolCallingProvider())
+
+    result = agent.tools.call_tool(
+        "get_priority_recovery_orders",
+        {"minimum_rto_probability": "0.50", "minimum_order_value": "0", "limit": 3},
+        "session-test",
+    )
+
+    assert result["minimum_rto_probability"] == 0.50
+
+
+def test_priority_tool_normalizes_omitted_and_null_optional_arguments():
+    agent = make_agent(MockToolCallingProvider())
+
+    omitted = agent.tools.call_tool("get_priority_recovery_orders", {}, "session-test")
+    nulls = agent.tools.call_tool(
+        "get_priority_recovery_orders",
+        {"limit": None, "minimum_order_value": None, "minimum_rto_probability": None},
+        "session-test",
+    )
+
+    for result in (omitted, nulls):
+        assert result["limit"] == 50
+        assert result["minimum_order_value"] == 0.0
+        assert result["minimum_rto_probability"] == 0.30
+
+
+def test_priority_tool_preserves_explicit_zero_threshold():
+    agent = make_agent(MockToolCallingProvider())
+
+    result = agent.tools.call_tool(
+        "get_priority_recovery_orders",
+        {"minimum_rto_probability": 0.0},
+        "session-test",
+    )
+
+    assert result["minimum_rto_probability"] == 0.0
+
+
+@pytest.mark.parametrize("threshold", ["not-a-number", -0.01, 1.01])
+def test_priority_tool_rejects_invalid_threshold_at_tool_boundary(threshold):
+    agent = make_agent(MockToolCallingProvider())
+
+    with pytest.raises(ValueError):
+        agent.tools.call_tool(
+            "get_priority_recovery_orders",
+            {"minimum_rto_probability": threshold},
+            "session-test",
+        )
 
 
 def test_mock_llm_order_workflow_still_returns_grounded_numbers():

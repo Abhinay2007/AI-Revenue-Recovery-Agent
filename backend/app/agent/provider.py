@@ -63,6 +63,9 @@ class LLMProvider(ABC):
     def reset(self) -> None:
         return None
 
+    def status(self) -> dict[str, Any]:
+        return {"provider": self.name, "model": self.model, "status": "ready"}
+
 
 class LocalRuleBasedProvider(LLMProvider):
     name = "local"
@@ -113,6 +116,113 @@ class ModalProvider(LLMProvider):
 
     def plan(self, message: str) -> IntentPlan:
         raise RuntimeError("Modal provider is reserved for a future milestone")
+
+
+class OllamaProvider(LLMProvider):
+    """Ollama adapter using its native chat and tool-calling API."""
+
+    supports_tool_calling = True
+
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "http://localhost:11434",
+        timeout_seconds: float = 120.0,
+        client: Any | None = None,
+    ) -> None:
+        self.name = "ollama"
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.timeout_seconds = timeout_seconds
+        self.client = client or httpx.Client(timeout=timeout_seconds)
+        self._messages: list[dict[str, Any]] = []
+
+    def plan(self, message: str) -> IntentPlan:
+        return LocalRuleBasedProvider().plan(message)
+
+    def complete(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        tool_choice: str = "auto",
+    ) -> ProviderResponse:
+        if not self._messages:
+            self._messages = [self._translate_message(message) for message in messages]
+        else:
+            self._messages.extend(self._translate_message(message) for message in messages)
+
+        request_body: dict[str, Any] = {
+            "model": self.model,
+            "messages": self._messages,
+            "stream": False,
+            "tools": [self._translate_tool(tool) for tool in tools],
+        }
+        try:
+            response = self.client.post(f"{self.base_url}/api/chat", json=request_body)
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise TimeoutError("Ollama provider request timed out") from exc
+        except httpx.HTTPError as exc:
+            raise RuntimeError(f"Ollama provider request failed: {exc}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Ollama provider request failed: {exc}") from exc
+
+        payload = response.json()
+        allowed_tool_names = {
+            str(tool.get("name") or tool.get("function", {}).get("name") or "")
+            for tool in tools
+        }
+        provider_response = parse_ollama_response(payload, allowed_tool_names=allowed_tool_names)
+        if provider_response.tool_calls:
+            message: dict[str, Any] = {
+                "role": "assistant",
+                "content": provider_response.final_text or "",
+                "tool_calls": [
+                    {"function": {"name": call.name, "arguments": call.arguments}}
+                    for call in provider_response.tool_calls
+                ],
+            }
+            self._messages.append(message)
+        return provider_response
+
+    def status(self) -> dict[str, Any]:
+        try:
+            response = self.client.get(f"{self.base_url}/api/tags")
+            response.raise_for_status()
+            return {"provider": self.name, "model": self.model, "status": "ready"}
+        except Exception as exc:
+            return {
+                "provider": self.name,
+                "model": self.model,
+                "status": "unavailable",
+                "error": str(exc),
+            }
+
+    @staticmethod
+    def _translate_message(message: dict[str, Any]) -> dict[str, Any]:
+        if message.get("type") == "function_call_output":
+            output = message.get("output", "")
+            if not isinstance(output, str):
+                output = json.dumps(output, sort_keys=True)
+            return {"role": "tool", "content": output}
+        translated = {key: value for key, value in message.items() if key in {"role", "content"}}
+        return translated
+
+    @staticmethod
+    def _translate_tool(tool: dict[str, Any]) -> dict[str, Any]:
+        if tool.get("type") == "function" and "function" in tool:
+            function = dict(tool["function"])
+        else:
+            function = {
+                "name": str(tool.get("name") or ""),
+                "description": str(tool.get("description") or ""),
+                "parameters": tool.get("parameters") or {},
+            }
+        function.pop("strict", None)
+        return {"type": "function", "function": function}
+
+    def reset(self) -> None:
+        self._messages = []
 
 
 class OpenAIResponsesProvider(LLMProvider):
@@ -316,6 +426,63 @@ def parse_openai_response(payload: dict[str, Any]) -> ProviderResponse:
     return ProviderResponse(final_text=final_text, tool_calls=tool_calls, raw=payload)
 
 
+def parse_ollama_response(
+    payload: dict[str, Any],
+    allowed_tool_names: set[str] | None = None,
+) -> ProviderResponse:
+    message = payload.get("message") if isinstance(payload, dict) else None
+    if not isinstance(message, dict):
+        raise ValueError("malformed Ollama response: missing message")
+    final_text = message.get("content")
+    if final_text is not None and not isinstance(final_text, str):
+        raise ValueError("malformed Ollama response: invalid message content")
+    tool_calls: list[ProviderToolCall] = []
+    for index, raw_call in enumerate(message.get("tool_calls") or []):
+        function = raw_call.get("function") if isinstance(raw_call, dict) else None
+        if not isinstance(function, dict) or not function.get("name"):
+            raise ValueError("malformed Ollama response: missing tool function")
+        name = str(function["name"])
+        if allowed_tool_names is not None and name not in allowed_tool_names:
+            raise ValueError(f"unsupported Ollama tool: {name}")
+        raw_arguments = function.get("arguments") or {}
+        try:
+            arguments = json.loads(raw_arguments) if isinstance(raw_arguments, str) else dict(raw_arguments)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"malformed tool arguments for {function.get('name')}") from exc
+        tool_calls.append(
+            ProviderToolCall(
+                id=str(raw_call.get("id") or f"ollama_call_{index}"),
+                name=name,
+                arguments=arguments,
+            )
+        )
+    if not tool_calls and isinstance(final_text, str) and "<|python_tag|>" in final_text:
+        compatibility_call = _parse_ollama_python_tag(final_text, allowed_tool_names)
+        return ProviderResponse(final_text=None, tool_calls=[compatibility_call], raw=payload)
+    if final_text is None and not tool_calls:
+        raise ValueError("malformed Ollama response: no final text or tool calls")
+    return ProviderResponse(final_text=final_text, tool_calls=tool_calls, raw=payload)
+
+
+def _parse_ollama_python_tag(content: str, allowed_tool_names: set[str] | None) -> ProviderToolCall:
+    match = re.fullmatch(r"\s*<\|python_tag\|>\s*(\{.*\})\s*", content, flags=re.DOTALL)
+    if match is None:
+        raise ValueError("malformed Ollama python_tag tool call")
+    try:
+        payload = json.loads(match.group(1))
+    except json.JSONDecodeError as exc:
+        raise ValueError("malformed Ollama python_tag JSON") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("name"), str):
+        raise ValueError("malformed Ollama python_tag tool call")
+    name = payload["name"]
+    if allowed_tool_names is not None and name not in allowed_tool_names:
+        raise ValueError(f"unsupported Ollama tool: {name}")
+    arguments = payload.get("parameters", {})
+    if not isinstance(arguments, dict):
+        raise ValueError("malformed Ollama python_tag parameters")
+    return ProviderToolCall(id="ollama_python_tag_0", name=name, arguments=arguments)
+
+
 class MockToolCallingProvider(LLMProvider):
     supports_tool_calling = True
     name = "mock"
@@ -344,7 +511,15 @@ class MockToolCallingProvider(LLMProvider):
         return response
 
 
-def build_provider(provider_name: str, model: str, api_key: str | None = None, timeout_seconds: float = 20.0) -> LLMProvider:
+def build_provider(
+    provider_name: str,
+    model: str,
+    api_key: str | None = None,
+    timeout_seconds: float = 20.0,
+    ollama_base_url: str = "http://localhost:11434",
+) -> LLMProvider:
+    if provider_name == "ollama":
+        return OllamaProvider(model=model, base_url=ollama_base_url, timeout_seconds=timeout_seconds)
     if provider_name == "local":
         return LocalRuleBasedProvider()
     if provider_name == "openai":

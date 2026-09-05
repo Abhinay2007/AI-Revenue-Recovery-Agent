@@ -1,240 +1,304 @@
 # AI Revenue Recovery Agent
 
-## Track
+<p align="center">
+  <img
+    src="assets/RevenueHarness _AI_Revenue_Recovery_Agent .png"
+    alt="RevenueHarness — AI Revenue Recovery Agent"
+    width="900"
+  />
+</p>
 
-Razorpay Buildathon — Track 03: AI Revenue Recovery
+## Links
 
-## Problem
+- **Docs:** [Notion Documentation](https://app.notion.com/p/RevenueHarness-AI-Revenue-Recovery-Agent-3d1d7856c985806ebc2ffe06f093033f?source=copy_link)
+- **Live Demo:** [RevenueHarness — AI Revenue Recovery Agent](https://ai-revenue-recovery-agent-e3il.onrender.com/)
+(Live demo sometimes not give AI responce because free groq API so clone repo and run using local model or with your own API key for better result 😊😊😊).
 
-Indian D2C merchants lose revenue when Cash on Delivery orders are refused, fail delivery, and return to origin. RTO is not just a logistics problem: it leaks revenue, locks inventory, burns shipping cost, and reduces confidence in COD as a growth channel.
+## Project Summary
 
-This project aims to move beyond merely identifying risky orders. The larger goal is an explainable, policy-bounded revenue recovery system that can predict risk, explain why revenue is at risk, evaluate recovery options, and perform only permitted actions with a complete audit trail.
+An operations demo for Indian D2C revenue recovery. It analyzes synthetic Cash on Delivery orders, predicts Return-to-Origin (RTO) risk, calculates revenue at risk, and identifies policy-permitted recovery opportunities.
 
-## Current Milestone
+Risk and financial calculations remain deterministic. Ollama provides natural-language interaction and coordinates typed backend tools, while recovery execution remains protected by merchant policy and explicit approval.
 
-This repository currently contains the project foundation, synthetic-data pipeline, COD RTO model, deterministic recovery decision layer, and a bounded AI agent orchestration layer.
+## High-Level Design (HLD)
+<p align="center">
+  <img
+    src="assets/HLD.png"
+    alt="RevenueHarness — AI Revenue Recovery Agent"
+    width="900"
+  />
+</p>
 
-Implemented now:
+## Low-Level Design (LLD)
+<p align="center">
+  <img
+    src="assets/LLD.png"
+    alt="RevenueHarness — AI Revenue Recovery Agent"
+    width="900"
+  />
+</p>
 
-- FastAPI backend foundation
-- PostgreSQL and SQLAlchemy setup
-- Initial `orders` model for future RTO prediction
-- Health checks
-- Deterministic synthetic order data generator
-- Dataset validation
-- COD-only RTO risk model training pipeline
-- Temporal train/validation/test split
-- Baselines, gradient-boosting model, calibration, threshold analysis, and synthetic cost analysis
-- Prediction service with risk levels and model-derived explanation metadata
-- Deterministic recovery decision engine with policy guardrails and audit event output
-- Synthetic recovery simulator foundation
-- AI revenue recovery agent with local, mock, OpenAI Responses API, and Groq providers
-- Typed tools for order analysis, risk, revenue-at-risk, recovery recommendations, policy checks, simulated execution, audit, and merchant-level summaries
-- Explicit approval API before simulated recovery execution
-- pytest coverage for the foundation
-- Docker Compose for backend and PostgreSQL
 
-Not implemented yet:
-
-- Razorpay integration
-- React dashboard
-- Real payment execution
-- Customer messaging
-- Durable audit or pending-approval persistence
-
-## Planned Architecture
+## Project Folder Structure
 
 ```text
-Order
- ↓
-Risk Detection
- ↓
-Risk Explanation
- ↓
-Recovery Options
- ↓
-Economic Decision
- ↓
-AI Agent
- ↓
-Guardrails
- ↓
-Recovery Action
- ↓
-Outcome
- ↓
-Revenue Recovered
- ↓
-Audit Trail
+AI-Revenue-Recovery-Agent/
+├── backend/
+│   ├── app/
+│   │   ├── agent/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── db/
+│   │   ├── decision/
+│   │   ├── integrations/
+│   │   ├── ml/
+│   │   ├── models/
+│   │   ├── services/
+│   │   └── tools/
+│   ├── tests/
+│   └── pyproject.toml
+├── data/
+│   ├── generated/
+│   ├── README.md
+│   └── generate.py
+├── docs/
+├── evaluation/
+├── frontend/
+│   ├── src/
+│   ├── Dockerfile
+│   └── package.json
+├── scripts/
+│   ├── agent_smoke_test.py
+│   └── ollama_smoke_test.py
+├── docker/
+│   ├── backend.Dockerfile
+│   ├── hf-entrypoint.sh
+│   └── hf-nginx.conf
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── .gitignore
+└── README.md
 ```
 
-Important separation:
+## Windows Setup
 
-```text
-ML Model -> predicts RTO probability
-Explainability -> explains model prediction
-Economic Engine -> calculates financial outcomes
-Policy Engine -> determines what actions are permitted
-AI Agent -> orchestrates tools and reasoning
-Execution Layer -> performs permitted actions
-Audit Layer -> records what happened
+### Prerequisites
+
+Install:
+
+- Git for Windows
+- Docker Desktop with Linux containers enabled
+- Ollama for Windows
+
+### Install Ollama
+
+Install Ollama from [ollama.com/download](https://ollama.com/download), then open PowerShell:
+
+```powershell
+ollama serve
 ```
 
-The LLM must never invent financial calculations. Financial outcomes belong in deterministic code.
+### Download Model
 
-## Development Principles
+```powershell
+ollama pull llama3.2:latest
+ollama list
+Invoke-RestMethod http://localhost:11434/api/tags
+```
 
-- Explainable decisions
-- Deterministic financial calculations
-- Bounded actions
-- Merchant-defined policies
-- Human escalation
-- Auditability
-- Held-out evaluation
-- Honest metrics
+### Configure Environment
 
-## Running Locally
+Clone the repository and create the environment file:
 
-Build and start PostgreSQL plus the backend:
+```powershell
+git clone <repository-url>
+Set-Location AI-Revenue-Recovery-Agent
+Copy-Item .env.example .env
+notepad .env
+```
+
+Set these values in `.env`:
+
+```env
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.2:latest
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+RAZORPAY_ENABLED=false
+```
+
+Keep credentials and API keys out of the repository.
+
+### Run with Docker
+
+```powershell
+docker compose up -d --build
+```
+
+### Verify
+
+```powershell
+docker compose ps
+Invoke-RestMethod http://localhost:8000/health
+Invoke-RestMethod http://localhost:8000/api/v1/db/health
+Invoke-RestMethod http://localhost:8000/api/v1/agent/status
+```
+
+Open `http://localhost:3000`.
+
+### Stop
+
+```powershell
+docker compose down
+```
+## macOS Setup
+
+### Prerequisites
+
+Install:
+
+- Git
+- Docker Desktop
+- Ollama
+
+### Install Ollama
+
+Install Ollama with the official macOS installer or Homebrew:
 
 ```bash
-docker compose up --build
+brew install --cask ollama
+ollama serve
 ```
 
-Health check:
+### Download Model
 
 ```bash
+ollama pull llama3.2:latest
+ollama list
+curl http://localhost:11434/api/tags
+```
+
+### Configure Environment
+
+```bash
+git clone <repository-url>
+cd AI-Revenue-Recovery-Agent
+cp .env.example .env
+```
+
+Set these values in `.env`:
+
+```env
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.2:latest
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+RAZORPAY_ENABLED=false
+```
+
+Keep credentials and API keys out of the repository.
+
+### Run with Docker
+
+```bash
+docker compose up -d --build
+```
+
+### Verify
+
+```bash
+docker compose ps
 curl http://localhost:8000/health
-```
-
-Database health check:
-
-```bash
 curl http://localhost:8000/api/v1/db/health
+curl http://localhost:8000/api/v1/agent/status
 ```
 
-## Tests
+Open `http://localhost:3000`.
 
-Install backend dependencies, including test dependencies:
+### Stop
 
 ```bash
-pip install -e "backend[dev]"
+docker compose down
 ```
 
-Run tests from the repository root:
+## Linux Setup
+
+### Prerequisites
+
+Install:
+
+- Git
+- Docker Engine
+- Docker Compose plugin
+- Ollama
+
+### Install Ollama
+
+Install Ollama with the official installer:
 
 ```bash
-pytest
+curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-Train and evaluate the COD RTO risk model:
+### Download Model
+
+Configure Ollama for Docker host-gateway access, then start it:
 
 ```bash
-python3 -m app.ml.train
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
 ```
 
-When using the project virtualenv created during local setup:
+In another terminal:
 
 ```bash
-.venv/bin/python -m app.ml.train
+ollama pull llama3.2:latest
+ollama list
+curl http://localhost:11434/api/tags
 ```
 
-This command loads `data/generated/orders.csv`, filters to COD orders, uses a chronological train/validation/test split, trains baselines and a gradient-boosting model, fits calibration on validation data only, saves model artifacts under `data/generated/models/`, and writes `evaluation/reports/rto_model_report.md`.
-
-Run the synthetic recovery experiment:
+### Configure Environment
 
 ```bash
-.venv/bin/python evaluation/recovery_experiment.py --seed 42
+git clone <repository-url>
+cd AI-Revenue-Recovery-Agent
+cp .env.example .env
 ```
 
-This compares a no-intervention baseline with the deterministic recovery policy on the same held-out COD evaluation batch. Outputs are written to `evaluation/reports/recovery_experiment.json` and `evaluation/reports/recovery_experiment.md`.
+Set these values in `.env`:
 
-Agent API:
+```env
+LLM_PROVIDER=ollama
+LLM_MODEL=llama3.2:latest
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+RAZORPAY_ENABLED=false
+```
+
+Keep credentials and API keys out of the repository.
+
+### Configure Docker → Ollama
+
+The Compose configuration maps `host.docker.internal` to the host gateway for the backend container. No custom Docker network is required.
+
+If UFW or another firewall blocks Docker-to-host traffic, allow TCP port 11434 only from the Docker bridge subnet. Do not expose Ollama to the public internet.
+
+### Run with Docker
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/agent/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Recover ORD-0042-0009754","session_id":"demo"}'
+docker compose up -d --build
 ```
 
-The first response only creates a pending simulated action. Execute through explicit approval:
+### Verify
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/agent/approve \
-  -H "Content-Type: application/json" \
-  -d '{"pending_action_id":"...","approved":true,"approved_action":"PARTIAL_PREPAY","session_id":"demo"}'
+docker compose ps
+curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/db/health
+curl http://localhost:8000/api/v1/agent/status
 ```
 
-No real payment or customer message is executed in this milestone.
+Open `http://localhost:3000`.
 
-Razorpay Test Mode status:
+### Stop
 
 ```bash
-curl http://localhost:8000/api/v1/razorpay/status
+docker compose down
 ```
-
-Razorpay Test Mode connectivity:
-
-```bash
-curl "http://localhost:8000/api/v1/razorpay/connectivity"
-```
-
-Create a developer/demo Razorpay Test Mode order using paise:
-
-```bash
-curl -X POST http://localhost:8000/api/v1/razorpay/test-orders \
-  -H "Content-Type: application/json" \
-  -d '{"amount":10000,"currency":"INR","receipt":"demo-ORD-0042-0009754","internal_order_id":"ORD-0042-0009754"}'
-```
-
-Razorpay is disabled by default and accepts only test-mode keys. See `docs/razorpay-test-mode.md`.
-
-Real LLM smoke test:
-
-```bash
-LLM_PROVIDER=groq \
-LLM_MODEL=<configured-model> \
-LLM_API_KEY=<secret> \
-.venv/bin/python scripts/agent_smoke_test.py
-```
-
-The smoke test makes one real LLM request, verifies that at least one typed tool was exercised, checks that financial values are grounded in tool outputs, and separately verifies the approval gate with the offline provider. Both OpenAI and Groq are interchangeable LLM providers: they orchestrate typed tools while deterministic backend services remain authoritative for financial calculations, recovery economics, policy, approval, execution, and audit. The normal pytest suite does not call external APIs.
-
-## Synthetic Data
-
-Generate 10,000 deterministic synthetic orders:
-
-```bash
-python data/generate.py --rows 10000 --seed 42
-```
-
-The CSV is written to:
-
-```text
-data/generated/orders.csv
-```
-
-Generated datasets are intentionally ignored by Git. The generator creates realistic relationships between COD usage, pincode risk, customer history, order value, category, and `rto_outcome` without using real customer data.
-
-## Configuration
-
-Configuration is read from environment variables:
-
-```text
-APP_ENV
-DATABASE_URL
-DATASET_PATH
-LOG_LEVEL
-LLM_PROVIDER
-LLM_MODEL
-LLM_API_KEY
-MAX_AGENT_STEPS
-LLM_REQUEST_TIMEOUT_SECONDS
-RAZORPAY_ENABLED
-RAZORPAY_KEY_ID
-RAZORPAY_KEY_SECRET
-RAZORPAY_REQUEST_TIMEOUT_SECONDS
-RAZORPAY_TEST_ORDER_ID
-```
-
-`DATASET_PATH` resolves the synthetic demo dataset from the project root by default, and the Docker image also includes the dataset at `/app/data/generated/orders.csv`. Use `.env.example` as a safe template. Do not commit `.env`.

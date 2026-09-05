@@ -6,6 +6,11 @@ from app.agent.schemas import AgentApprovalRequest, AgentChatRequest, AgentRespo
 router = APIRouter(prefix="/api/v1/agent", tags=["agent"])
 
 
+@router.get("/status")
+def agent_status() -> dict[str, object]:
+    return agent_singleton.provider.status()
+
+
 @router.post("/chat", response_model=AgentResponse)
 def agent_chat(request: AgentChatRequest) -> AgentResponse:
     return agent_singleton.chat(request)
@@ -14,4 +19,3 @@ def agent_chat(request: AgentChatRequest) -> AgentResponse:
 @router.post("/approve", response_model=AgentResponse)
 def agent_approve(request: AgentApprovalRequest) -> AgentResponse:
     return agent_singleton.approve(request)
-
