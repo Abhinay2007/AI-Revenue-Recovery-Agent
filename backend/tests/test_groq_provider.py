@@ -3,6 +3,7 @@ import json
 import pytest
 
 from app.agent.provider import GroqProvider, ProviderToolCall, build_provider, parse_groq_response
+from app.agent.agent import AgentToolset
 
 
 class FakeFunction:
@@ -137,6 +138,18 @@ def test_groq_provider_translates_empty_and_parameterized_tools():
     translated = client.completions.requests[0]["tools"]
     assert translated[0]["function"]["parameters"] == {"type": "object", "properties": {}, "required": []}
     assert translated[1]["function"]["parameters"]["required"] == ["order_id"]
+
+
+def test_groq_provider_marks_every_declared_property_required_for_strict_schemas():
+    priority_tool = next(tool for tool in AgentToolset().tool_definitions() if tool["name"] == "get_priority_recovery_orders")
+
+    translated = GroqProvider._translate_tool(priority_tool)
+
+    assert translated["function"]["parameters"]["required"] == [
+        "limit",
+        "minimum_rto_probability",
+        "minimum_order_value",
+    ]
 
 
 def test_groq_provider_parses_multiple_tool_calls():
