@@ -354,7 +354,9 @@ class GroqProvider(LLMProvider):
         parameters = dict(function.get("parameters") or {})
         if parameters.get("type") == "object":
             parameters.setdefault("properties", {})
-            parameters.setdefault("required", [])
+            # Groq strict schemas require every declared property to be listed
+            # as required. Nullable properties preserve application defaults.
+            parameters["required"] = list(parameters["properties"])
         else:
             parameters = {"type": "object", "properties": {}, "required": []}
         function["parameters"] = parameters
